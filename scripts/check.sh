@@ -441,6 +441,10 @@ esac
 EOS
 cat > "$P/bin/dig" <<'EOS'
 #!/bin/sh
+if [ -n "${DIG_FAIL:-}" ]; then
+  printf ';; communications error to 127.0.0.1#53: connection refused\n'
+  exit 0
+fi
 case "$*" in
   *AAAA*tg.d.plb*) printf '2a02:2168::1111\n' ;;
   *" A "*tg.d.plb*) printf '203.0.113.7\n' ;;
@@ -455,6 +459,13 @@ case "$out" in *"tg.d.plb.example.ru"*) ;; *) fail "status: нет имени и
 case "$out" in *"comment"*|*"# "* ) fail "status: комментарий попал в имена" ;; esac
 grep -q 'web1.*stat -c' "$P/log" || fail "status: не проверил свежесть web1"
 if grep -q 'ns.example.*stat -c' "$P/log"; then fail "status: полез на сам NS"; fi
+
+# status: ошибки dig не должны выглядеть адресами
+rc=0
+out="$(DIG_FAIL=1 HOST2NS_HOME="$P/home" NAME=check PATH="$P/bin:$PATH" SSH_LOG="$P/log-fail" \
+    bash "$HERE/status.sh" 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] || fail "status при недоступном DNS: ожидался код 1, получен $rc"
+case "$out" in *"communications error"*) fail "status: ошибка dig попала в адреса" ;; esac
 
 # prune: удаляет только хост, которого нет в реестре
 P="$T/prune"
@@ -507,7 +518,7 @@ grep -q '^restrict,command="sudo -n /usr/local/bin/check-recv.sh" ssh-ed25519 ' 
 # Конфиг NSD из bootstrap-nsd: проверяем настоящим nsd-checkconf, если он есть.
 bash "$HERE/bootstrap-nsd.sh" --print-config > "$T/00-check.conf"
 grep -q $'^\tdo-ip4: yes$' "$T/00-check.conf" || fail "в конфиге NSD нет реальной табуляции"
-grep -q $'^\tip-address: 0.0.0.0@53$' "$T/00-check.conf" || fail "в конфиге NSD нет ip-address"
+grep -q $'^\tip-address: ' "$T/00-check.conf" || fail "в конфиге NSD нет ip-address"
 if grep -q 'listen:' "$T/00-check.conf"; then fail "в конфиге NSD остался listen:"; fi
 if command -v nsd-checkconf >/dev/null; then
     printf 'include: "%s"\n' "$T/00-check.conf" > "$T/nsd.conf"

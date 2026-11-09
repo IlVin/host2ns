@@ -43,8 +43,12 @@ if [ -f "$HOSTS_FILE" ]; then
     [ -n "${host:-}" ] || continue
     fam="$(fam_of "$host")"
     for n in $names; do
-      v6="$(dig +time=1 +tries=1 +short AAAA "$n.$BASE" @"$NS_ADDR" 2>/dev/null | head -1)"
-      v4="$(dig +time=1 +tries=1 +short A "$n.$BASE" @"$NS_ADDR" 2>/dev/null | head -1)"
+      # dig при ошибке пишет ";; communications error..." в stdout:
+      # пропускаем только строки, похожие на настоящий адрес
+      v6="$(dig +time=1 +tries=1 +short AAAA "$n.$BASE" @"$NS_ADDR" 2>/dev/null \
+          | awk '/^[0-9A-Fa-f:.]+$/ { print; exit }')"
+      v4="$(dig +time=1 +tries=1 +short A "$n.$BASE" @"$NS_ADDR" 2>/dev/null \
+          | awk '/^[0-9.]+$/ { print; exit }')"
       printf "  %-28s %-12s %-46s %s\n" "$n.$BASE" "$fam" "${v6:--}" "${v4:--}"
       [ -n "$v6" ] || [ -n "$v4" ] || BAD=1
       # сверка с политикой
