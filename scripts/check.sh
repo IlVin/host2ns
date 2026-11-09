@@ -50,6 +50,9 @@ now="$(date +%s)"
 grep -q 'tg.d IN AAAA 2a02:2168::1111' "$zf" || fail "нет записи tg.d"
 [ -f "$ZONEDIR/h.example.ru.zone" ] || fail "нет зоны h"
 grep -q 'name: "plb.example.ru"' "$ZONES_CONF" || fail "нет блока зоны в конфиге"
+if command -v nsd-checkzone >/dev/null; then
+    nsd-checkzone plb.example.ru "$zf" >/dev/null || fail "nsd-checkzone: зона невалидна"
+fi
 [ ! -s "$ZONELIST" ] || fail "рантайм-список должен быть пуст"
 grep -q 'zonelistfile' "$ZONELIST_CONF" || fail "нет zonelistfile в конфиге"
 [ "$(stat -c %a "$zf")" = 644 ] || fail "файл зоны не 644"
@@ -430,6 +433,24 @@ esac
 if NAME=check bash "$HERE/authorize.sh" --print-line "not a key" >/dev/null 2>&1; then
     fail "authorize: принял мусор вместо ключа"
 fi
+# команда authorize действительно пишет строку и не плодит дубли
+A="$T/auth"
+mkdir -p "$A/home" "$A/bin"
+ssh-keygen -t ed25519 -N "" -C auth -f "$A/k" >/dev/null 2>&1 || fail "ssh-keygen auth"
+cat > "$A/bin/ssh" <<'EOS'
+#!/bin/sh
+HOME="$FAKE_HOME" bash -c "$2"
+EOS
+chmod +x "$A/bin/ssh"
+for _ in 1 2; do
+    PATH="$A/bin:$PATH" FAKE_HOME="$A/home" NAME=check \
+        bash "$HERE/authorize.sh" user@ns "$(cat "$A/k.pub")" >/dev/null 2>&1 \
+        || fail "authorize: не смог записать ключ"
+done
+[ "$(wc -l < "$A/home/.ssh/authorized_keys")" = 1 ] || fail "authorize: ключ продублирован"
+grep -q '^restrict,command="sudo -n /usr/local/bin/check-recv.sh" ssh-ed25519 ' \
+    "$A/home/.ssh/authorized_keys" || fail "authorize: неверная строка"
+[ "$(stat -c %a "$A/home/.ssh/authorized_keys")" = 600 ] || fail "authorize: режим authorized_keys"
 
 # Конфиг NSD из bootstrap-nsd: проверяем настоящим nsd-checkconf, если он есть.
 bash "$HERE/bootstrap-nsd.sh" --print-config > "$T/00-check.conf"
