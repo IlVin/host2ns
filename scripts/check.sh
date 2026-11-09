@@ -207,6 +207,7 @@ fi
 if parse_family auto >/dev/null 2>&1; then fail "parse_family принял auto"; fi
 v6_fixture='2: eth0    inet6 2001:db8::1/64 scope global temporary dynamic
 2: eth0    inet6 2001:db8::2/64 scope global deprecated dynamic
+2: eth0    inet6 2001:db8::9/64 scope global tentative
 2: eth0    inet6 fd00::1/64 scope global
 2: eth0    inet6 2001:db8::3/64 scope global mngtmpaddr noprefixroute'
 [ "$(printf '%s\n' "$v6_fixture" | ipv6_candidates | first_public_v6)" = "2001:db8::3" ] \

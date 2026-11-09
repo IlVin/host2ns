@@ -7,7 +7,8 @@ set -euo pipefail
 # --- выбор адреса ------------------------------------------------------------
 # temporary/deprecated IPv6 меняются под ногами: публикуем стабильный адрес.
 ipv6_candidates() {
-    awk '/temporary|deprecated/ { next } { split($4, a, "/"); print a[1] }'
+    # tentative/dadfailed — адрес ещё не прошёл проверку дублей (DAD)
+    awk '/temporary|deprecated|tentative|dadfailed/ { next } { split($4, a, "/"); print a[1] }'
 }
 
 ipv4_candidates() {
