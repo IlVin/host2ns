@@ -150,13 +150,27 @@ nsd_pids_on_53() {
         | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u
 }
 
+# nsd_pids — PID'ы NSD из сокетов (ss) и из таблицы процессов.
+# Старый NSD может держать адрес в другом network namespace: в ss его нет,
+# но процесс виден в /proc, поэтому ищем ещё и по командной строке.
+nsd_pids() {
+    {
+        nsd_pids_on_53
+        if command -v pgrep >/dev/null 2>&1; then
+            pgrep -f '(^|/)nsd( |$)' 2>/dev/null || true
+        else
+            ps -eo pid=,args= 2>/dev/null | awk '$0 ~ /(^|[\/ ])nsd( |$)/ { print $1 }'
+        fi
+    } | sort -u
+}
+
 # stop_existing_nsd — освободить 53 от прежнего NSD: управляемого unit'а
 # или процесса старой установки. NSD переименовывает потоки в "nsd: main",
 # поэтому pgrep -x nsd его не находит; берём PID из ss и проверяем exe.
 stop_existing_nsd() {
     systemctl stop nsd >/dev/null 2>&1 || true
     local pids="" pid exe alive
-    for pid in $(nsd_pids_on_53); do
+    for pid in $(nsd_pids); do
         [ -d "/proc/$pid" ] || continue
         exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
         case "$exe" in
