@@ -10,7 +10,7 @@ NAME         ?= host2ns
 BASE         ?= iv77msk.ru
 HOST2NS_HOME ?= $(HOME)/.$(NAME)
 
-.PHONY: help host2ns status check bootstrap-nsd bootstrap-host restore authorize prune
+.PHONY: help host2ns status check bootstrap-nsd bootstrap-host restore authorize prune nsd-who
 
 help:
 	@echo "make host2ns          применить реестр: установить/обновить на всех хостах"
@@ -19,6 +19,7 @@ help:
 	@echo "make bootstrap-host HOST=x  подготовить хост x по SSH: скрипты + NOPASSWD"
 	@echo "make authorize HOST=x разрешить ключ хоста на NS (после bootstrap-host)"
 	@echo "make bootstrap-nsd HOST=x   установить NSD на хосте x по SSH"
+	@echo "make nsd-who HOST=x         показать, кто держит 53 (все netns)"
 	@echo "make restore          перегенерировать зоны из состояния"
 	@echo "make prune            удалить имена хостов, убранных из реестра"
 	@echo ""
@@ -55,6 +56,11 @@ bootstrap-nsd:
 	@test -n "$(HOST)" || { echo "нужен HOST=<ns>; локальная машина указывается явно, например HOST=user@localhost" >&2; exit 2; }
 	@scp -q scripts/bootstrap-nsd.sh "$(HOST):/tmp/$(NAME)-bootstrap-nsd.sh"
 	@set -o pipefail; ssh -tt "$(HOST)" 'sudo NAME=$(NAME) BASE=$(BASE) bash /tmp/$(NAME)-bootstrap-nsd.sh; rc=$$?; rm -f /tmp/$(NAME)-bootstrap-nsd.sh; exit $$rc' 2>&1 | cat
+
+nsd-who:
+	@test -n "$(HOST)" || { echo "нужен HOST=<алиас>" >&2; exit 2; }
+	@scp -q scripts/bootstrap-nsd.sh "$(HOST):/tmp/$(NAME)-bootstrap-nsd.sh"
+	@set -o pipefail; ssh -tt "$(HOST)" 'sudo bash /tmp/$(NAME)-bootstrap-nsd.sh --who-has-53; rc=$$?; rm -f /tmp/$(NAME)-bootstrap-nsd.sh; exit $$rc' 2>&1 | cat
 
 check:
 	@bash scripts/check.sh

@@ -55,10 +55,39 @@ nsd_config() {
     printf '\tcontrol-enable: yes\n'
 }
 
+# all_netns_port_lines — слушатели 53 во ВСЕХ network namespace'ах хоста.
+# Нужно, когда старый DNS виден не из host-ss: сокет живёт в netns
+# контейнера/unit'а. Печатает netns, представителя и строки ss.
+all_netns_port_lines() {
+    local nsp pid ino out
+    declare -A seen=()
+    command -v nsenter >/dev/null 2>&1 || return 0
+    for nsp in /proc/[0-9]*/ns/net; do
+        [ -r "$nsp" ] || continue
+        pid="${nsp#/proc/}"; pid="${pid%%/*}"
+        ino="$(stat -Lc %i "$nsp" 2>/dev/null || true)"
+        [ -n "$ino" ] || continue
+        [ -n "${seen[$ino]:-}" ] && continue
+        seen["$ino"]=1
+        out="$(nsenter --net="$nsp" sh -c "ss -lnup 'sport = :53' 2>/dev/null; ss -lntp 'sport = :53' 2>/dev/null" 2>/dev/null | grep -v '^State')" || true
+        [ -z "$out" ] || printf 'netns %s (pid %s)\n%s\n' "$ino" "$pid" "$out"
+    done
+}
+
 case "${1:-}" in
     --print-config) nsd_config; exit 0 ;;
+    --who-has-53)
+        [ "$(id -u)" = "0" ] || die "нужен root: sudo $0 --who-has-53"
+        out="$(all_netns_port_lines)"
+        if [ -n "$out" ]; then
+            printf '%s\n' "$out"
+        else
+            echo "порт 53 нигде не занят"
+        fi
+        exit 0
+        ;;
     '') ;;
-    *) echo "использование: $0 [--print-config]" >&2; exit 2 ;;
+    *) echo "использование: $0 [--print-config|--who-has-53]" >&2; exit 2 ;;
 esac
 
 [ "$(id -u)" = "0" ] || die "нужен root: sudo $0"
@@ -124,8 +153,14 @@ show_port_owner() {
     command -v ss >/dev/null 2>&1 || return 0
     out="$( { ss -lnup 'sport = :53' 2>/dev/null; ss -lntp 'sport = :53' 2>/dev/null; } | grep -v '^State' )"
     [ -n "$out" ] || return 0
-    echo "порт 53 занят:" >&2
+    echo "порт 53 в host netns:" >&2
     printf '%s\n' "$out" >&2
+    local all
+    all="$(all_netns_port_lines)"
+    if [ -n "$all" ]; then
+        echo "порт 53 во всех netns:" >&2
+        printf '%s\n' "$all" >&2
+    fi
     if grep -q 'ip-address: 0\.0\.0\.0@53' "$CONF" 2>/dev/null; then
         # wildcard-конфиг (fallback без iproute2): виноват резолвер
         case "$out" in
@@ -150,12 +185,13 @@ nsd_pids_on_53() {
         | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u
 }
 
-# nsd_pids — PID'ы NSD из сокетов (ss) и из таблицы процессов.
-# Старый NSD может держать адрес в другом network namespace: в ss его нет,
-# но процесс виден в /proc, поэтому ищем ещё и по командной строке.
+# nsd_pids — PID'ы NSD из сокетов (host и все netns) и из таблицы процессов.
+# Старый NSD может держать адрес в другом network namespace: в host-ss его
+# нет, но сокет виден в его netns, а процесс — в /proc.
 nsd_pids() {
     {
         nsd_pids_on_53
+        all_netns_port_lines | grep -o 'pid=[0-9]*' | cut -d= -f2 || true
         if command -v pgrep >/dev/null 2>&1; then
             pgrep -f '(^|/)nsd( |$)' 2>/dev/null || true
         else

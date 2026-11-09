@@ -97,6 +97,7 @@
 | `make bootstrap-host HOST=x` | да | по SSH: код в `/usr/local/lib` и правило sudo |
 | `make authorize HOST=x` | нет | разрешает ключ хоста на NS (обычно делает `make host2ns`) |
 | `make bootstrap-nsd HOST=x` | да | по SSH: установка и настройка NSD на хосте x |
+| `make nsd-who HOST=x` | да | показать, кто держит 53 во всех network namespace |
 | `make restore` | да | перегенерировать зоны из состояния и перечитать NSD |
 | `make prune` | нет | удалить имена хостов, убранных из реестра |
 
