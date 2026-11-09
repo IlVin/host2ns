@@ -52,6 +52,39 @@ EOF
 [ -d "$R/state/plb.other.example" ] || fail "BASE из файла не применён"
 grep -q 'name: "plb.other.example"' "$R/zones.conf" || fail "зона не попала в конфиг"
 
+# nat без собственных адресов: имя должно дожить до подклейки адреса.
+R="$T/recv-nat"
+mkdir -p "$R"
+printf 'example.ru\n' > "$R/base"
+recv_run "$R" SSH_CONNECTION='203.0.113.7 1234 198.51.100.1 22' <<'EOF' \
+    || fail "nat-хост не опубликовался"
+host h-nat
+policy nat
+tg.d.plb
+EOF
+[ -f "$R/state/plb.example.ru/h-nat" ] || fail "nat: имя потеряно"
+grep -qx 'tg.d 203.0.113.7' "$R/state/plb.example.ru/h-nat" || fail "nat: нет A"
+
+# nat вместе со своим IPv6: обе записи на имя.
+R="$T/recv-nat6"
+mkdir -p "$R"
+printf 'example.ru\n' > "$R/base"
+recv_run "$R" SSH_CONNECTION='203.0.113.8 1234 198.51.100.1 22' <<'EOF' \
+    || fail "nat+ipv6 не опубликовался"
+host h-nat6
+policy nat,ipv6
+tg.d.plb 2a02:2168::1111
+EOF
+grep -qx 'tg.d 203.0.113.8' "$R/state/plb.example.ru/h-nat6" || fail "nat+ipv6: нет A"
+grep -qx 'tg.d 2a02:2168::1111' "$R/state/plb.example.ru/h-nat6" || fail "nat+ipv6: нет AAAA"
+
+# пустой набор удаляет имена хоста.
+recv_run "$R" <<'EOF' || fail "пустой набор не отработал"
+host h-nat6
+policy ipv6
+EOF
+[ ! -e "$R/state/plb.example.ru/h-nat6" ] || fail "пустой набор не удалил имена"
+
 # Конфиг NSD из bootstrap-nsd: проверяем настоящим nsd-checkconf, если он есть.
 bash "$HERE/bootstrap-nsd.sh" --print-config > "$T/00-check.conf"
 grep -q $'^\tdo-ip4: yes$' "$T/00-check.conf" || fail "в конфиге NSD нет реальной табуляции"

@@ -3,11 +3,12 @@
 #
 # Протокол по stdin:
 #   host <id>
-#   policy <auto|ipv6|ipv4|nat>[,<...>]
+#   policy <ipv6|ipv4|nat>[,<...>]
 #   <имя> <адрес> [<адрес>...]
 #
 # Токен nat: к именам добавляется IPv4, который видит NS в SSH_CONNECTION —
-# это публичный адрес роутера для хоста за NAT.
+# это публичный адрес роутера для хоста за NAT. Имена без собственных адресов
+# сохраняются: иначе nat-хосту не к чему было бы приклеить адрес.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -23,7 +24,12 @@ LABEL_RE='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9]
 
 ID=""; POLICY=""
 TMPD="$(mktemp -d)"
+# имена без адресов: отдельный каталог, чтобы не попасть в обход файлов зон
+META="$TMPD/.meta"
+mkdir -p "$META"
 trap 'rm -rf "$TMPD"' EXIT
+
+add_record() { printf '%s %s\n' "$2" "$3" >> "$TMPD/$1"; }
 
 while read -r a b rest; do
     [ -z "${a:-}" ] && continue
@@ -37,10 +43,12 @@ while read -r a b rest; do
     zlabel="${name##*.}"; rel="${name%.*}"
     [[ "$zlabel" =~ $LABEL_RE ]] || { echo "плохая зона: $zlabel" >&2; exit 2; }
     [[ "$rel" =~ $LABEL_RE ]] || { echo "плохая запись: $rel" >&2; exit 2; }
+    zone="$zlabel.$BASE"
+    grep -qxF "$rel" "$META/$zone" 2>/dev/null || printf '%s\n' "$rel" >> "$META/$zone"
     for addr in $addrs; do
         [ -z "$addr" ] && continue
         [[ "$addr" =~ ^[0-9a-fA-F:]+$ || "$addr" =~ ^[0-9.]+$ ]] || { echo "плохой адрес: $addr" >&2; exit 2; }
-        printf '%s %s\n' "$rel" "$addr" >> "$TMPD/$zlabel.$BASE"
+        add_record "$zone" "$rel" "$addr"
     done
 done
 
@@ -54,14 +62,19 @@ if printf '%s' "$POLICY" | tr ',' '\n' | grep -qx nat; then
     case "$seen" in
         *:*) : ;;                       # IPv6 — не наш случай
         '') : ;;
-        *)  for f in "$TMPD"/*; do
-                [ -f "$f" ] || continue
-                awk -v a="$seen" '{ print $0; print $1, a }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+        *)  for mf in "$META"/*; do
+                [ -f "$mf" ] || continue
+                zone="$(basename "$mf")"
+                while read -r rel; do
+                    [ -z "$rel" ] && continue
+                    add_record "$zone" "$rel" "$seen"
+                done < "$mf"
             done ;;
     esac
 fi
 
-if [ -z "$(ls -A "$TMPD")" ]; then
+# Своих записей нет — значит, набор имён пуст.
+if [ -z "$(find "$TMPD" -maxdepth 1 -mindepth 1 -type f -print -quit)" ]; then
     for d in "$STATE"/*/; do
         [ -d "$d" ] || continue
         rm -f "$d/$ID"
@@ -72,6 +85,7 @@ if [ -z "$(ls -A "$TMPD")" ]; then
 fi
 
 for f in "$TMPD"/*; do
+    [ -f "$f" ] || continue
     zone="$(basename "$f")"
     mkdir -p "$STATE/$zone"
     sort -u -o "$f" "$f"
@@ -79,4 +93,4 @@ for f in "$TMPD"/*; do
 done
 
 zones_apply
-echo "ok: $ID -> $(ls "$TMPD" | tr '\n' ' ')"
+echo "ok: $ID -> $(find "$TMPD" -maxdepth 1 -mindepth 1 -type f -printf '%f ' | sed 's/ $//')"
