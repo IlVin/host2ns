@@ -61,5 +61,11 @@ echo "== запуск"
 systemctl enable nsd >/dev/null 2>&1 || true
 # конфиг мог измениться: перезапуск применяет его и к уже работающему NSD
 systemctl restart nsd >/dev/null 2>&1 || systemctl start nsd >/dev/null 2>&1 || true
-systemctl is-active --quiet nsd || die "NSD не поднялся: journalctl -u nsd"
+if ! systemctl is-active --quiet nsd; then
+    # на Ubuntu/Debian порт 53 часто держит systemd-resolved (127.0.0.53:53)
+    if command -v ss >/dev/null && ss -lnu 'sport = :53' 2>/dev/null | grep -q ':53 '; then
+        echo "подсказка: порт 53 уже занят (обычно systemd-resolved); освободите его" >&2
+    fi
+    die "NSD не поднялся: journalctl -u nsd"
+fi
 echo "готово: NSD настроен (NAME=$NAME, BASE=$BASE)"
