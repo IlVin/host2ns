@@ -312,6 +312,38 @@ case "$out" in *"make bootstrap-host HOST=web1"*) ;; *) fail "publish: нет п
 case "$out" in *"нет доступа"*) fail "publish: ошибка установщика замаскирована" ;; esac
 grep -q 'user@ns' "$P/log" || fail "publish: NS без пользователя из config"
 
+# status: комментарии в реестре, политика, пропуск самого NS
+P="$T/status"
+mkdir -p "$P/home" "$P/bin"
+printf 'NS=user@ns.example\nBASE=example.ru\nFAMILY=ipv6,ipv4\n' > "$P/home/config"
+printf 'web1 tg.d.plb # основной\nns.example ns.a\n' > "$P/home/hosts"
+printf 'ns.example ipv4 # шлюз\n' > "$P/home/policy"
+cat > "$P/bin/ssh" <<'EOS'
+#!/bin/sh
+printf '%s\n' "$*" >> "$SSH_LOG"
+case "$*" in
+  *"ls -1 "*) printf 'plb.example.ru\n' ;;
+  *"find "*) : ;;
+  *"stat -c "*) printf '2026-11-09 15:00:00.000000000 +0300\n' ;;
+esac
+EOS
+cat > "$P/bin/dig" <<'EOS'
+#!/bin/sh
+case "$*" in
+  *AAAA*tg.d.plb*) printf '2a02:2168::1111\n' ;;
+  *" A "*tg.d.plb*) printf '203.0.113.7\n' ;;
+  *" A "*ns.a*) printf '203.0.113.7\n' ;;
+esac
+EOS
+chmod +x "$P/bin/ssh" "$P/bin/dig"
+rc=0
+out="$(HOST2NS_HOME="$P/home" NAME=check PATH="$P/bin:$PATH" SSH_LOG="$P/log" bash "$HERE/status.sh" 2>&1)" || rc=$?
+[ "$rc" -eq 0 ] || fail "status: ожидался код 0, получен $rc: $out"
+case "$out" in *"tg.d.plb.example.ru"*) ;; *) fail "status: нет имени из реестра" ;; esac
+case "$out" in *"comment"*|*"# "* ) fail "status: комментарий попал в имена" ;; esac
+grep -q 'web1.*stat -c' "$P/log" || fail "status: не проверил свежесть web1"
+if grep -q 'ns.example.*stat -c' "$P/log"; then fail "status: полез на сам NS"; fi
+
 # prune: удаляет только хост, которого нет в реестре
 P="$T/prune"
 mkdir -p "$P/home" "$P/bin"

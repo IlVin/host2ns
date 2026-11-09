@@ -17,12 +17,14 @@ BAD=0
 
 declare -A FAM
 if [ -f "$CFG_DIR/policy" ]; then
-    while read -r h f; do
-        case "$h" in ''|\#*) continue ;; esac
-        FAM["$h"]="$f"
+    while read -r line; do
+        line="${line%%#*}"
+        read -r h f <<< "$line"
+        [ -n "${h:-}" ] || continue
+        FAM["$h"]="$(printf '%s' "${f:-}" | tr -d '[:space:]')"
     done < "$CFG_DIR/policy"
 fi
-fam_of() { printf '%s' "${FAM[$1]:-$FAMILY}"; }
+fam_of() { printf '%s' "${FAM[$1]:-$FAMILY}" | tr -d '[:space:]'; }
 wants() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
 
 echo "== зоны на NS ($NS)"
@@ -33,12 +35,14 @@ echo
 printf "== имена (политика из config: FAMILY=$FAMILY)\n"
 printf '  %-28s %-12s %-46s %s\n' "DOMAIN" "POLICY" "IPv6" "IPv4"
 if [ -f "$HOSTS_FILE" ]; then
-  while read -r host names; do
-    case "$host" in ''|\#*) continue ;; esac
+  while read -r line; do
+    line="${line%%#*}"
+    read -r host names <<< "$line"
+    [ -n "${host:-}" ] || continue
     fam="$(fam_of "$host")"
     for n in $names; do
-      v6="$(dig +short AAAA "$n.$BASE" @"$NS_ADDR" 2>/dev/null | head -1)"
-      v4="$(dig +short A "$n.$BASE" @"$NS_ADDR" 2>/dev/null | head -1)"
+      v6="$(dig +time=1 +tries=1 +short AAAA "$n.$BASE" @"$NS_ADDR" 2>/dev/null | head -1)"
+      v4="$(dig +time=1 +tries=1 +short A "$n.$BASE" @"$NS_ADDR" 2>/dev/null | head -1)"
       printf "  %-28s %-12s %-46s %s\n" "$n.$BASE" "$fam" "${v6:--}" "${v4:--}"
       [ -n "$v6" ] || [ -n "$v4" ] || BAD=1
       # сверка с политикой
@@ -50,6 +54,8 @@ if [ -f "$HOSTS_FILE" ]; then
           printf '      ! политика ждёт nat, но IPv4 нет\n'; BAD=1; fi
       if wants "$fam" ipv6 && [ -z "$v6" ]; then
           printf '      ! политика ждёт ipv6, но AAAA нет\n'; BAD=1; fi
+      if wants "$fam" ipv4 && ! wants "$fam" nat && [ -z "$v4" ]; then
+          printf '      ! политика ждёт ipv4, но A нет\n'; BAD=1; fi
     done
   done < "$HOSTS_FILE"
 else
@@ -64,9 +70,11 @@ ssh -n "$NS" "find /var/lib/$NAME/state -mindepth 2 -maxdepth 2 -type f -printf 
 echo
 echo "== последняя публикация"
 if [ -f "$HOSTS_FILE" ]; then
-  while read -r host names; do
-    case "$host" in ''|\#*) continue ;; esac
-    [ "$host" = "$NS" ] && continue
+  while read -r line; do
+    line="${line%%#*}"
+    read -r host names <<< "$line"
+    [ -n "${host:-}" ] || continue
+    [ "$host" = "$NS_ADDR" ] && continue
     ts="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$host" "stat -c %y /var/lib/$NAME/last 2>/dev/null" 2>/dev/null)"
     printf '  %-24s %-12s %s\n' "$host" "$(fam_of "$host")" "${ts:-нет данных}"
   done < "$HOSTS_FILE"
