@@ -26,7 +26,7 @@ zone_render() {
     tmp="$(mktemp "$(dirname "$zf")/.$(basename "$zf").XXXXXX")"
     if ! {
         printf '$TTL 60\n'
-        printf '@ IN SOA ns.%s. admin.%s. ( %s 3600 600 604800 60 )\n' "$BASE" "$BASE" "$(date +%Y%m%d%H)"
+        printf '@ IN SOA ns.%s. admin.%s. ( %s 3600 600 604800 60 )\n' "$BASE" "$BASE" "$(date +%s)"
         printf '@ IN NS ns.%s.\n' "$BASE"
         for f in "$d"/*; do
             [ -f "$f" ] || continue

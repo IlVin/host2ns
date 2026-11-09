@@ -35,6 +35,11 @@ NO_RESTART=1 zones_apply
 
 zf="$ZONEDIR/plb.example.ru.zone"
 [ -f "$zf" ] || fail "зона не создана: $zf"
+serial="$(awk '/IN SOA/ { print $7 }' "$zf")"
+[[ "$serial" =~ ^[0-9]+$ ]] || fail "SOA serial не число: $serial"
+now="$(date +%s)"
+[ "$serial" -le "$now" ] && [ $((now - serial)) -lt 120 ] \
+    || fail "SOA serial не epoch: $serial (сейчас $now)"
 grep -q 'tg.d IN AAAA 2a02:2168::1111' "$zf" || fail "нет записи tg.d"
 [ -f "$ZONEDIR/h.example.ru.zone" ] || fail "нет зоны h"
 grep -q 'name: "plb.example.ru"' "$ZONES_CONF" || fail "нет блока зоны в конфиге"
