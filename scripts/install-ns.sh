@@ -21,13 +21,18 @@ done
 [ -f "$SRC/zonegen.sh" ] || { echo "нет исходников в $SRC" >&2; exit 2; }
 
 echo "  каталоги"
-install -d -m 755 "/var/lib/$NAME/state" /etc/nsd/nsd.conf.d
+install -d -m 755 "/var/lib/$NAME/state" "/etc/$NAME" /etc/nsd/nsd.conf.d
 if [ -d /var/lib/yach/ddns ] && [ ! -e "/var/lib/$NAME/state/.migrated" ]; then
     cp -a /var/lib/yach/ddns/. "/var/lib/$NAME/state/" 2>/dev/null || true
     touch "/var/lib/$NAME/state/.migrated"
     echo "  состояние перенесено из /var/lib/yach/ddns"
 fi
 chown -R "$RUN_USER" "/var/lib/$NAME"
+
+echo "  база имён"
+# приёмник и генератор читают BASE отсюда: окружения юнита им не хватает
+printf '%s\n' "$BASE" > "/etc/$NAME/base"
+chmod 644 "/etc/$NAME/base"
 
 echo "  скрипты"
 install -m 755 -o root -g root "$SRC/zonegen.sh"  "/usr/local/bin/$NAME-zonegen.sh"
@@ -45,7 +50,6 @@ After=local-fs.target
 Type=oneshot
 RemainAfterExit=yes
 Environment=NAME=$NAME
-Environment=BASE=$BASE
 Environment=NO_RESTART=1
 ExecStart=/usr/local/bin/$NAME-rebuild.sh
 

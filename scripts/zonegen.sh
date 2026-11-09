@@ -4,7 +4,14 @@
 set -u
 
 NAME="${NAME:-host2ns}"
+BASE_FILE="${BASE_FILE:-/etc/$NAME/base}"
 BASE="${BASE:-iv77msk.ru}"
+# BASE живёт в файле, а не в окружении: приёмник запускается из forced command,
+# где окружение установщика недоступно.
+if [ -f "$BASE_FILE" ]; then
+    BASE="$(tr -d '[:space:]' < "$BASE_FILE")"
+fi
+[ -n "$BASE" ] || { echo "ОШИБКА: пустой BASE ($BASE_FILE)" >&2; exit 2; }
 STATE="${STATE:-/var/lib/$NAME/state}"
 ZONEDIR="${ZONEDIR:-/var/lib/nsd/zones}"
 ZONES_CONF="${ZONES_CONF:-/etc/nsd/nsd.conf.d/10-$NAME-zones.conf}"

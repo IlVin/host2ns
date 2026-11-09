@@ -24,7 +24,8 @@
 ## 4.3. Что делает `host2ns`
 
 Для NS-хоста: `sudo -n <NAME>-install.sh ns` — приёмник, генератор зон, юнит
-`<NAME>-zones.service`, связка с `nsd`, `authorized_keys`, sudoers приёмника.
+`<NAME>-zones.service`, связка с `nsd`, sudoers приёмника и файл
+`/etc/<NAME>/base` с базой имён.
 
 Для каждого хоста реестра: `sudo -n <NAME>-install.sh sender --ns … --names … --family …` —
 ключ, `id`, `names`, `family`, отправитель, таймер, немедленная публикация.
@@ -42,6 +43,7 @@
 Всё параметризовано одной переменной `NAME` (по умолчанию `host2ns`):
 
     /etc/<NAME>/..., /var/lib/<NAME>/..., /usr/local/lib/<NAME>/
+    /etc/<NAME>/base — база имён, общая для юнита и приёмника
     <NAME>.service, <NAME>.timer, <NAME>-zones.service
 
 ## 4.6. Где упоминается имя
