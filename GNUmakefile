@@ -3,6 +3,9 @@
 # Реестр у разработчика: ~/.host2ns/config и ~/.host2ns/hosts.
 # В репозитории только примеры.
 
+# все скрипты — bash; рецепты тоже, чтобы set -o pipefail работал везде
+SHELL := /bin/bash
+
 NAME         ?= host2ns
 BASE         ?= iv77msk.ru
 HOST2NS_HOME ?= $(HOME)/.$(NAME)
