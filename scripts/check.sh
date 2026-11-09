@@ -235,6 +235,25 @@ tg.d.plb
 EOF
 [ ! -e "$R/state/plb.example.ru/h-priv" ] || fail "nat опубликовал приватный адрес"
 
+# prune: удаляет только хост, которого нет в реестре
+P="$T/prune"
+mkdir -p "$P/home" "$P/bin"
+printf 'NS=user@ns\n' > "$P/home/config"
+printf 'host-a a.example\n' > "$P/home/hosts"
+cat > "$P/bin/ssh" <<'EOS'
+#!/bin/sh
+case "$*" in
+  *find*) printf 'host-a\nhost-b\n' ;;
+  *) cat >> "$SSH_LOG"; printf '\n---\n' >> "$SSH_LOG" ;;
+esac
+EOS
+chmod +x "$P/bin/ssh"
+HOST2NS_HOME="$P/home" NAME=check PATH="$P/bin:$PATH" SSH_LOG="$P/log" \
+    bash "$HERE/prune.sh" >/dev/null || fail "prune.sh упал"
+grep -q '^host host-b$' "$P/log" || fail "prune: host-b не удалён"
+if grep -q '^host host-a$' "$P/log"; then fail "prune: удалил хост из реестра"; fi
+if grep -q '^tg' "$P/log"; then fail "prune: отправил имена вместо пустого набора"; fi
+
 # authorize.sh: строка authorized_keys с forced command.
 ssh-keygen -t ed25519 -N "" -C "check@test" -f "$T/ak" >/dev/null 2>&1 || fail "ssh-keygen"
 line="$(NAME=check bash "$HERE/authorize.sh" --print-line "$(cat "$T/ak.pub")")"
