@@ -39,6 +39,27 @@ grep -q 'tg.d IN AAAA 2a02:2168::1111' "$zf" || fail "нет записи tg.d"
 [ -f "$ZONEDIR/h.example.ru.zone" ] || fail "нет зоны h"
 grep -q 'name: "plb.example.ru"' "$ZONES_CONF" || fail "нет блока зоны в конфиге"
 [ ! -s "$ZONELIST" ] || fail "рантайм-список должен быть пуст"
+[ "$(stat -c %a "$zf")" = 644 ] || fail "файл зоны не 644"
+if find "$ZONEDIR" -maxdepth 1 -name '.*' -type f | grep -q .; then
+    fail "остался временный файл зоны"
+fi
+if find "$T" -maxdepth 1 -name '.check-zones.*' -type f | grep -q .; then
+    fail "остался временный файл конфига"
+fi
+
+# запись зоны не зависит от umask вызывающего
+U="$T/umask"
+mkdir -p "$U/state/plb.example.ru"
+printf 'tg.d 2a02:2168::1111\n' > "$U/state/plb.example.ru/h1"
+(
+    umask 077
+    export NAME=check BASE=example.ru BASE_FILE="$T/no-base" STATE="$U/state" ZONEDIR="$U/zones" \
+        ZONES_CONF="$U/zones.conf" ZONELIST="$U/zl" ZONELIST_CONF="$U/zlc" NO_RESTART=1
+    # shellcheck disable=SC1091
+    . "$HERE/zonegen.sh"
+    zones_apply
+)
+[ "$(stat -c %a "$U/zones/plb.example.ru.zone")" = 644 ] || fail "зона не 644 при umask 077"
 
 # BASE из файла: окружение установщика до приёмника не доходит.
 R="$T/recv-base"

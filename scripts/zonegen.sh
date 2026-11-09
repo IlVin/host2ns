@@ -21,8 +21,10 @@ DRY="${DRY:-0}"
 
 # zone_render <каталог состояния зоны> <файл зоны>
 zone_render() {
-    local d="$1" zf="$2" f n a
-    {
+    local d="$1" zf="$2" f n a tmp
+    # пишем рядом и переименовываем: NSD не должен увидеть половину файла
+    tmp="$(mktemp "$(dirname "$zf")/.$(basename "$zf").XXXXXX")"
+    if ! {
         printf '$TTL 60\n'
         printf '@ IN SOA ns.%s. admin.%s. ( %s 3600 600 604800 60 )\n' "$BASE" "$BASE" "$(date +%Y%m%d%H)"
         printf '@ IN NS ns.%s.\n' "$BASE"
@@ -36,8 +38,13 @@ zone_render() {
                 esac
             done < "$f"
         done
-    } > "$zf"
-    chown nsd:nsd "$zf" 2>/dev/null || true
+    } > "$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    chmod 644 "$tmp"
+    chown nsd:nsd "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$zf"
 }
 
 # zones_apply — перегенерировать зоны и применить конфиг.
@@ -45,8 +52,9 @@ zone_render() {
 zones_apply() {
     local d zone zf conf_tmp
     local -A keep=()
-    conf_tmp="$(mktemp)"
     mkdir -p "$STATE" "$ZONEDIR"
+    install -d -m 755 "$(dirname "$ZONES_CONF")"
+    conf_tmp="$(mktemp "$(dirname "$ZONES_CONF")/.$NAME-zones.XXXXXX")"
 
     for d in "$STATE"/*/; do
         [ -d "$d" ] || continue
@@ -64,16 +72,15 @@ zones_apply() {
 
     if [ "$DRY" = "1" ]; then rm -f "$conf_tmp"; return 0; fi
 
-    install -d -m 755 "$(dirname "$ZONES_CONF")"
+    # конфиг тоже заменяем атомарно
+    chmod 644 "$conf_tmp"
+    mv -f "$conf_tmp" "$ZONES_CONF"
 
     # zonelistfile — в /run: каталог принадлежит NSD
     if [ ! -f "$ZONELIST_CONF" ]; then
         printf 'server:\n\tzonelistfile: "%s"\n' "$ZONELIST" > "$ZONELIST_CONF"
         chmod 644 "$ZONELIST_CONF"
     fi
-    install -m 644 "$conf_tmp" "$ZONES_CONF"
-    rm -f "$conf_tmp"
-
     # файлы удалённых зон не должны оставаться в zonesdir
     for zf in "$ZONEDIR"/*.zone; do
         [ -f "$zf" ] || continue
