@@ -44,6 +44,9 @@ sudo -n install -d -m 755 -o "$RUN_USER" -g "$(id -gn)" "/var/lib/$NAME"
 # на NS-хосте каталог уже создан установщиком приёмника (root). Файл last
 # должен быть записываем пользователю сервиса, даже если каталог root-овый.
 sudo -n touch "/var/lib/$NAME/last"
+# установка — повод опубликовать заново: состояние на NS могло быть очищено
+# prune'ом или восстановлением, а локальный last об этом не знает
+sudo -n truncate -s 0 "/var/lib/$NAME/last"
 sudo -n chown "$RUN_USER" "/var/lib/$NAME/last"
 sudo -n install -d -m 755 "$CFG"
 
