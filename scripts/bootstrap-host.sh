@@ -2,11 +2,16 @@
 # bootstrap-host.sh — одноразовая подготовка хоста под host2ns.
 # Запускается с sudo. Кладёт скрипты в /usr/local/lib/host2ns, создаёт
 # host2ns-install.sh и правило NOPASSWD только для него.
+#
+# --check — только проверить комплект файлов, ничего не устанавливая.
 set -euo pipefail
 
 NAME="${NAME:-host2ns}"
+CHECK=0
+case "${1:-}" in
+    --check) CHECK=1; shift ;;
+esac
 SENDER="${SUDO_USER:-${1:-}}"
-[ -n "$SENDER" ] || { echo "не удалось определить пользователя" >&2; exit 2; }
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 LIB="/usr/local/lib/$NAME"
@@ -19,6 +24,12 @@ for f in $FILES; do
 done
 [ -f "$SRC/host2ns-install.sh" ] || { echo "нет $SRC/host2ns-install.sh" >&2; exit 1; }
 
+if [ "$CHECK" = "1" ]; then
+    echo "комплект полный: $SRC"
+    exit 0
+fi
+
+[ -n "$SENDER" ] || { echo "не удалось определить пользователя" >&2; exit 2; }
 [ "$(id -u)" = "0" ] || { echo "нужен root" >&2; exit 2; }
 
 install -d -m 755 "$LIB"

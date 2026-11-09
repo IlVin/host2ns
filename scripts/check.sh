@@ -164,11 +164,13 @@ B="$T/boot"; mkdir -p "$B/ok" "$B/bad"
 for f in host2ns.sh install-sender.sh install-ns.sh receiver.sh rebuild.sh zonegen.sh host2ns-install.sh bootstrap-host.sh; do
     cp "$HERE/$f" "$B/ok/$f"
 done
-out="$(SUDO_USER=alice bash "$B/ok/bootstrap-host.sh" 2>&1 || true)"
-case "$out" in *"нужен root"*) ;; *) fail "bootstrap-host: не дошёл до проверки root: $out" ;; esac
+out="$(bash "$B/ok/bootstrap-host.sh" --check 2>&1)" || fail "bootstrap-host --check: полный комплект отвергнут"
+case "$out" in *"комплект полный"*) ;; *) fail "bootstrap-host --check: нет подтверждения: $out" ;; esac
 cp "$HERE/bootstrap-host.sh" "$B/bad/bootstrap-host.sh"
-out="$(SUDO_USER=alice bash "$B/bad/bootstrap-host.sh" 2>&1 || true)"
-case "$out" in *"неполный комплект"*) ;; *) fail "bootstrap-host: принял неполный комплект: $out" ;; esac
+if out="$(bash "$B/bad/bootstrap-host.sh" --check 2>&1)"; then
+    fail "bootstrap-host --check: принял неполный комплект"
+fi
+case "$out" in *"неполный комплект"*) ;; *) fail "bootstrap-host --check: нет ошибки: $out" ;; esac
 
 # dispatcher: NAME и LIB берутся из имени файла.
 ln -s "$HERE/host2ns-install.sh" "$T/foo-install.sh"
