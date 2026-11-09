@@ -34,8 +34,10 @@ esac
 
 echo "== пакеты"
 if ! command -v nsd >/dev/null; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y nsd
+    # сторонние репозитории часто ломают update; это не повод не ставить nsd
+    apt-get update || echo "предупреждение: apt-get update завершился с ошибкой, продолжаем" >&2
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nsd \
+        || die "не удалось установить nsd: исправьте apt-get update (см. вывод выше)"
 fi
 
 echo "== каталоги"
