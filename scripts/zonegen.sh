@@ -92,9 +92,13 @@ zones_apply() {
     if systemctl is-active --quiet nsd 2>/dev/null; then
         # reconfig перечитывает состав зон, но не их данные: для данных reload
         nsd-control reconfig >/dev/null 2>&1 || true
-        nsd-control reload   >/dev/null 2>&1 || systemctl restart nsd >/dev/null 2>&1 || true
+        if ! nsd-control reload >/dev/null 2>&1; then
+            systemctl restart nsd >/dev/null 2>&1 || return 1
+        fi
     else
         systemctl reset-failed nsd >/dev/null 2>&1 || true
-        systemctl start nsd >/dev/null 2>&1 || true
+        systemctl start nsd >/dev/null 2>&1 || return 1
     fi
+    # «ok» имеет смысл только если NSD действительно работает с новыми данными
+    systemctl is-active --quiet nsd 2>/dev/null
 }

@@ -135,6 +135,22 @@ case "$out" in *"sender|ns"*) ;; *) fail "dispatcher: нет подсказки 
 [ "$(bash "$HERE/install-sender.sh" --print-user)" = "$(id -un)" ] \
     || fail "install-sender: RUN_USER по умолчанию"
 
+# ошибка применения зон не должна выглядеть успехом
+R="$T/recv-fail"
+mkdir -p "$R" "$T/fakebin"
+printf 'example.ru\n' > "$R/base"
+printf '#!/bin/sh\nexit 1\n' > "$T/fakebin/systemctl"
+printf '#!/bin/sh\nexit 1\n' > "$T/fakebin/nsd-control"
+chmod +x "$T/fakebin/systemctl" "$T/fakebin/nsd-control"
+if recv_run "$R" PATH="$T/fakebin:/usr/bin:/bin" NO_RESTART=0 >/dev/null 2>&1 <<'EOF'
+host h-fail
+policy ipv6
+tg.d.plb 2a02:2168::1111
+EOF
+then
+    fail "приёмник вернул успех, когда NSD не перечитал зоны"
+fi
+
 # приёмник отвергает не-IP и служебные диапазоны
 R="$T/recv-bad"
 mkdir -p "$R"
