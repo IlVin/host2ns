@@ -78,12 +78,35 @@ EOF
 grep -qx 'tg.d 203.0.113.8' "$R/state/plb.example.ru/h-nat6" || fail "nat+ipv6: нет A"
 grep -qx 'tg.d 2a02:2168::1111' "$R/state/plb.example.ru/h-nat6" || fail "nat+ipv6: нет AAAA"
 
-# пустой набор удаляет имена хоста.
+# пустой набор удаляет имена хоста и саму опустевшую зону.
 recv_run "$R" <<'EOF' || fail "пустой набор не отработал"
 host h-nat6
 policy ipv6
 EOF
 [ ! -e "$R/state/plb.example.ru/h-nat6" ] || fail "пустой набор не удалил имена"
+[ ! -d "$R/state/plb.example.ru" ] || fail "пустая зона осталась в состоянии"
+[ ! -e "$R/zones/plb.example.ru.zone" ] || fail "файл пустой зоны остался"
+grep -q 'name: "plb.example.ru"' "$R/zones.conf" && fail "пустая зона осталась в конфиге"
+
+# переезд имени между зонами: в прежней зоне записей быть не должно.
+R="$T/recv-move"
+mkdir -p "$R"
+printf 'example.ru\n' > "$R/base"
+recv_run "$R" <<'EOF' || fail "переезд: первый шаг"
+host h-move
+policy ipv6
+tg.d.plb 2a02:2168::1111
+EOF
+recv_run "$R" <<'EOF' || fail "переезд: второй шаг"
+host h-move
+policy ipv6
+tg.d.h 2a02:2168::1111
+EOF
+[ -f "$R/state/h.example.ru/h-move" ] || fail "переезд: нет записи в новой зоне"
+[ ! -e "$R/state/plb.example.ru/h-move" ] || fail "переезд: запись осталась в старой зоне"
+[ ! -d "$R/state/plb.example.ru" ] || fail "переезд: старая зона осталась"
+[ ! -e "$R/zones/plb.example.ru.zone" ] || fail "переезд: файл старой зоны остался"
+grep -q 'name: "plb.example.ru"' "$R/zones.conf" && fail "переезд: старая зона в конфиге"
 
 # install-sender: пользователь сервиса не теряется под sudo.
 [ "$(RUN_USER=alice bash "$HERE/install-sender.sh" --print-user)" = "alice" ] \

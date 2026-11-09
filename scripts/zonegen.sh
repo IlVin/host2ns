@@ -44,12 +44,18 @@ zone_render() {
 # NO_RESTART=1 — только файлы (режим юнита перед nsd).
 zones_apply() {
     local d zone zf conf_tmp
+    local -A keep=()
     conf_tmp="$(mktemp)"
     mkdir -p "$STATE" "$ZONEDIR"
 
     for d in "$STATE"/*/; do
         [ -d "$d" ] || continue
+        # пустая зона — не зона: не рендерим и не пишем в конфиг
+        if [ -z "$(find "$d" -maxdepth 1 -type f -print -quit)" ]; then
+            continue
+        fi
         zone="$(basename "$d")"
+        keep["$zone"]=1
         zf="$ZONEDIR/$zone.zone"
         zone_render "$d" "$zf"
         if [ "$DRY" = "1" ]; then printf '[dry] %s\n' "$zf"; continue; fi
@@ -67,6 +73,13 @@ zones_apply() {
     fi
     install -m 644 "$conf_tmp" "$ZONES_CONF"
     rm -f "$conf_tmp"
+
+    # файлы удалённых зон не должны оставаться в zonesdir
+    for zf in "$ZONEDIR"/*.zone; do
+        [ -f "$zf" ] || continue
+        zone="$(basename "$zf" .zone)"
+        [ -n "${keep[$zone]:-}" ] || rm -f "$zf"
+    done
 
     if [ -f "$ZONELIST" ]; then
         : > "$ZONELIST"

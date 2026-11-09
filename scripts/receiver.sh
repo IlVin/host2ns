@@ -73,24 +73,43 @@ if printf '%s' "$POLICY" | tr ',' '\n' | grep -qx nat; then
     esac
 fi
 
-# Своих записей нет — значит, набор имён пуст.
-if [ -z "$(find "$TMPD" -maxdepth 1 -mindepth 1 -type f -print -quit)" ]; then
-    for d in "$STATE"/*/; do
-        [ -d "$d" ] || continue
-        rm -f "$d/$ID"
-    done
-    zones_apply
-    echo "ok: $ID -> все имена удалены"
-    exit 0
-fi
+# Зоны, которые хост объявил в этом сеансе.
+declare -A DECLARED=()
+for mf in "$META"/*; do
+    [ -f "$mf" ] || continue
+    DECLARED["$(basename "$mf")"]=1
+done
 
-for f in "$TMPD"/*; do
-    [ -f "$f" ] || continue
-    zone="$(basename "$f")"
-    mkdir -p "$STATE/$zone"
-    sort -u -o "$f" "$f"
-    install -m 644 "$f" "$STATE/$zone/$ID"
+# Файл состояния в каждой объявленной зоне: новый набор заменяет прежний,
+# пустой — удаляет. Имена без адресов (например, неудачный nat) файла не дают.
+for zone in "${!DECLARED[@]}"; do
+    f="$TMPD/$zone"
+    if [ -s "$f" ]; then
+        mkdir -p "$STATE/$zone"
+        sort -u -o "$f" "$f"
+        install -m 644 "$f" "$STATE/$zone/$ID"
+    else
+        rm -f "$STATE/$zone/$ID"
+    fi
+done
+
+# В зонах, которые хост больше не объявляет, его записей быть не должно.
+for d in "$STATE"/*/; do
+    [ -d "$d" ] || continue
+    zone="$(basename "$d")"
+    [ -n "${DECLARED[$zone]:-}" ] || rm -f "$d/$ID"
+done
+
+# Пустой каталог зоны не нужен: он попал бы в конфиг NSD пустой зоной.
+for d in "$STATE"/*/; do
+    [ -d "$d" ] || continue
+    rmdir "$d" 2>/dev/null || true
 done
 
 zones_apply
-echo "ok: $ID -> $(find "$TMPD" -maxdepth 1 -mindepth 1 -type f -printf '%f ' | sed 's/ $//')"
+records="$(find "$TMPD" -maxdepth 1 -mindepth 1 -type f -printf '%f ' | sed 's/ $//')"
+if [ -z "$records" ]; then
+    echo "ok: $ID -> все имена удалены"
+else
+    echo "ok: $ID -> $records"
+fi
