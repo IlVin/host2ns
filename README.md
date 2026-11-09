@@ -89,7 +89,7 @@
 | `make bootstrap-host HOST=x` | да | кладёт код в `/usr/local/lib` и правило sudo |
 | `make authorize HOST=x` | нет | разрешает ключ хоста на NS (обычно делает `make host2ns`) |
 | `make bootstrap-nsd` | да | установка и настройка NSD на этом хосте |
-| `make restore` | да | перегенерировать зоны из состояния |
+| `make restore` | да | перегенерировать зоны из состояния и перечитать NSD |
 
 ## Проверка
 

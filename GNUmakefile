@@ -41,7 +41,8 @@ authorize:
 	NAME=$(NAME) ./scripts/authorize.sh "$$NS" "$$pub"
 
 restore:
-	@. $(HOST2NS_HOME)/config; ssh -t "$$NS" 'sudo systemctl restart $(NAME)-zones.service && systemctl is-active nsd'
+	@. $(HOST2NS_HOME)/config; \
+	ssh -t "$$NS" "sudo sh -c 'systemctl restart $(NAME)-zones.service && nsd-control reconfig && nsd-control reload' && systemctl is-active nsd"
 
 bootstrap-nsd:
 	@sudo NAME=$(NAME) BASE=$(BASE) ./scripts/bootstrap-nsd.sh
