@@ -172,6 +172,11 @@ if out="$(bash "$B/bad/bootstrap-host.sh" --check 2>&1)"; then
 fi
 case "$out" in *"неполный комплект"*) ;; *) fail "bootstrap-host --check: нет ошибки: $out" ;; esac
 
+# make bootstrap-nsd с HOST не должен запускать установку локально
+if MAKEFLAGS= make -s -C "$HERE/.." bootstrap-nsd HOST=dummy >/dev/null 2>&1; then
+    fail "bootstrap-nsd принял HOST и начал локальную установку"
+fi
+
 # dispatcher: NAME и LIB берутся из имени файла.
 ln -s "$HERE/host2ns-install.sh" "$T/foo-install.sh"
 out="$(bash "$T/foo-install.sh" sender 2>&1 || true)"

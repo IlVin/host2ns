@@ -18,7 +18,7 @@ help:
 	@echo "make check            локальная проверка генерации зон"
 	@echo "make bootstrap-host HOST=x  подготовить хост: скрипты + NOPASSWD"
 	@echo "make authorize HOST=x разрешить ключ хоста на NS (после bootstrap-host)"
-	@echo "make bootstrap-nsd    установить и настроить NSD на этом хосте"
+	@echo "make bootstrap-nsd    установить NSD на этом хосте (HOST не используется)"
 	@echo "make restore          перегенерировать зоны из состояния"
 	@echo "make prune            удалить имена хостов, убранных из реестра"
 	@echo ""
@@ -52,6 +52,12 @@ restore:
 	ssh -t "$$NS" "sudo sh -c 'systemctl restart $(NAME)-zones.service && nsd-control reconfig && nsd-control reload' && systemctl is-active nsd"
 
 bootstrap-nsd:
+	@test -z "$(HOST)" || { \
+	    echo "bootstrap-nsd ставит NSD на ТЕКУЩЕМ хосте; HOST не используется." >&2; \
+	    echo "Запустите на NS, например:" >&2; \
+	    echo "  scp scripts/bootstrap-nsd.sh $(HOST):/tmp/" >&2; \
+	    echo "  ssh -t $(HOST) 'sudo NAME=$(NAME) BASE=$(BASE) bash /tmp/bootstrap-nsd.sh'" >&2; \
+	    exit 2; }
 	@sudo NAME=$(NAME) BASE=$(BASE) ./scripts/bootstrap-nsd.sh
 
 check:
