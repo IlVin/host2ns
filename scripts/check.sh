@@ -108,6 +108,13 @@ EOF
 [ ! -e "$R/zones/plb.example.ru.zone" ] || fail "переезд: файл старой зоны остался"
 grep -q 'name: "plb.example.ru"' "$R/zones.conf" && fail "переезд: старая зона в конфиге"
 
+# dispatcher: NAME и LIB берутся из имени файла.
+ln -s "$HERE/host2ns-install.sh" "$T/foo-install.sh"
+out="$(bash "$T/foo-install.sh" sender 2>&1 || true)"
+case "$out" in *"/usr/local/lib/foo/install-sender.sh"*) ;; *) fail "dispatcher: LIB не из argv[0]: $out" ;; esac
+out="$(bash "$HERE/host2ns-install.sh" 2>&1 || true)"
+case "$out" in *"sender|ns"*) ;; *) fail "dispatcher: нет подсказки по использованию" ;; esac
+
 # install-sender: пользователь сервиса не теряется под sudo.
 [ "$(RUN_USER=alice bash "$HERE/install-sender.sh" --print-user)" = "alice" ] \
     || fail "install-sender: RUN_USER из окружения потерян"
