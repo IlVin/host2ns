@@ -11,14 +11,44 @@ ZONESDIR="${ZONESDIR:-/var/lib/nsd/zones}"
 
 die() { echo "ОШИБКА: $*" >&2; exit 2; }
 
+# nsd_listen — адреса, на которых слушает NSD.
+# Не 0.0.0.0: на Ubuntu/Debian 127.0.0.53/54 держит systemd-resolved, и
+# wildcard-биндинг конфликтует с ним. Слушаем реальные адреса хоста + loopback.
+nsd_listen() {
+    local addrs a
+    if ! command -v ip >/dev/null 2>&1; then
+        printf '\tip-address: 0.0.0.0@53\n'
+        printf '\tip-address: ::@53\n'
+        return 0
+    fi
+    # только реальные внешние интерфейсы: docker/br/veth не нужны, а
+    # temporary/deprecated/tentative IPv6 меняются под ногами
+    addrs="$(ip -o addr show scope global 2>/dev/null \
+        | awk '$2 ~ /^(docker|br-|veth|virbr|tap|vnet)/ { next }
+               /temporary|deprecated|tentative|dadfailed/ { next }
+               { split($4, a, "/"); print a[1] }' | sort -u)"
+    if [ -z "$addrs" ]; then
+        printf '\tip-address: 0.0.0.0@53\n'
+        printf '\tip-address: ::@53\n'
+        return 0
+    fi
+    while read -r a; do
+        [ -n "$a" ] || continue
+        printf '\tip-address: %s@53\n' "$a"
+    done <<< "$addrs"
+    printf '\tip-address: 127.0.0.1@53\n'
+    if ip -o addr show scope host 2>/dev/null | grep -q 'inet6 ::1/'; then
+        printf '\tip-address: ::1@53\n'
+    fi
+}
+
 # nsd_config — конфиг NSD, который пишет установщик. Печатается в stdout,
 # чтобы тесты могли проверить его через nsd-checkconf без root.
 nsd_config() {
     printf 'server:\n'
     printf '\tdo-ip4: yes\n'
     printf '\tdo-ip6: yes\n'
-    printf '\tip-address: 0.0.0.0@53\n'
-    printf '\tip-address: ::@53\n'
+    nsd_listen
     printf '\tzonesdir: "%s"\n' "$ZONESDIR"
     printf '\n'
     printf 'remote-control:\n'
@@ -77,21 +107,21 @@ show_port_owner() {
     [ -n "$out" ] || return 0
     echo "порт 53 занят:" >&2
     printf '%s\n' "$out" >&2
-    case "$out" in
-        *systemd-resolve*)
-            echo "это systemd-resolved. На выделенном DNS его отключают:" >&2
-            echo "  sudo systemctl disable --now systemd-resolved" >&2
-            echo "или выключают только stub-listener:" >&2
-            echo "  sudo mkdir -p /etc/systemd/resolved.conf.d" >&2
-            echo "  printf '[Resolve]\\nDNSStubListener=no\\n' | sudo tee /etc/systemd/resolved.conf.d/no-stub.conf" >&2
-            echo "  sudo systemctl restart systemd-resolved" >&2
-            echo "  # затем проверьте /etc/resolv.conf: он не должен указывать в 127.0.0.53" >&2
-            ;;
-        *nsd*)
-            echo "это NSD: служба не остановилась или процесс запущен вне systemd." >&2
-            echo "  sudo systemctl status nsd; sudo journalctl -u nsd -n 30" >&2
-            ;;
-    esac
+    if grep -q 'ip-address: 0\.0\.0\.0@53' "$CONF" 2>/dev/null; then
+        # wildcard-конфиг (fallback без iproute2): виноват резолвер
+        case "$out" in
+            *systemd-resolve*)
+                echo "NSD биндит 0.0.0.0@53, а его держит systemd-resolved." >&2
+                echo "Перезапустите установку: новый конфиг биндит конкретные адреса." >&2
+                ;;
+            *nsd*)
+                echo "это NSD: служба не остановилась или процесс запущен вне systemd." >&2
+                echo "  sudo systemctl status nsd; sudo journalctl -u nsd -n 30" >&2
+                ;;
+        esac
+    else
+        echo "NSD биндит конкретные адреса хоста; в journal видно, какой адрес не забиндился." >&2
+    fi
 }
 
 echo "== запуск"

@@ -11,7 +11,8 @@
 | could not open zone list /var/lib/nsd/zone.list: Permission denied | файл создан root, служба читает под nsd | zonelistfile в /run/nsd |
 | `nsd-checkconf: at '\tdo-ip4:' syntax error` | в heredoc без кавычек `\t` — два символа, а не табуляция | печатать конфиг через `printf`, проверять `cat -A` |
 | `nsd-checkconf: at 'listen:' syntax error` | `listen` — директива BIND/Knot | у NSD `ip-address:` (или `interface:`) |
-| `can't bind 0.0.0.0@53: Address already in use` | на Ubuntu/Debian порт часто держит `systemd-resolved` (127.0.0.53:53), но может и старый `nsd` | скрипт показывает владельца через `ss` и команды; резолвер отключают или переводят в `DNSStubListener=no` |
+| `can't bind 0.0.0.0@53: Address already in use` | старый/fallback wildcard-конфиг конфликтует с `systemd-resolved` (127.0.0.53/54) | основной конфиг биндит конкретные адреса хоста и loopback; `bootstrap-nsd` сам снимает start-limit |
+| `bootstrap-nsd` погасил рабочий NSD | новый wildcard-конфиг не смог занять 53, а старый процесс уже остановлен | теперь NSD слушает конкретные адреса; повторный запуск поднимает его из start-limit |
 | зоны создались с чужим доменом | BASE не доходит до forced command; остаётся дефолт | BASE в `/etc/<NAME>/base`, читать в `zonegen` |
 | имя осталось в старой зоне | приёмник заменял файл только в зонах нового payload | сверять весь объявленный набор зон |
 | пустая зона висит в конфиге | удалялись файлы, но не каталоги | не обслуживать пустые каталоги и удалять их |
