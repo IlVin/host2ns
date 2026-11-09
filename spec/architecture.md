@@ -45,8 +45,11 @@
 
 | Шаг | Пароль | Что делает |
 | --- | --- | --- |
-| `make bootstrap-host HOST=x` | да | кладёт скрипты в `/usr/local/lib/<NAME>` и создаёт правило sudo |
+| `make bootstrap-host HOST=x` | да | по SSH кладёт скрипты в `/usr/local/lib/<NAME>` и создаёт правило sudo |
 | `make host2ns` | нет | вызывает `sudo -n /usr/local/bin/<NAME>-install.sh sender|ns` |
+
+Отдельно `make bootstrap-nsd HOST=ns` по SSH ставит и настраивает NSD на
+указанном хосте: это подготовка DNS-сервера, а не установка кода проекта.
 
 `bootstrap-host` создаёт команду, разрешённую без пароля: диспетчер на два
 действия. Код берётся из root-каталога, поэтому подменить его через `/tmp`

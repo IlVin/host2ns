@@ -65,9 +65,9 @@
 NS, отправитель и рабочая машина. У каждого гостя свой пользователь `ilvin` с
 sudo и ключом оператора; NS и отправитель адресуются по именам из `/etc/hosts`.
 
-    make bootstrap-host HOST=<ns>      # на NS, нужен пароль
-    make bootstrap-nsd                 # на NS, нужен пароль
-    make bootstrap-host HOST=<host>    # на каждом отправителе, нужен пароль
+    make bootstrap-host HOST=<ns>      # на NS по SSH, нужен пароль
+    make bootstrap-nsd HOST=<ns>       # на NS по SSH, нужен пароль
+    make bootstrap-host HOST=<host>    # на каждом отправителе по SSH, нужен пароль
     make host2ns                       # на рабочей машине
     make status
     make restore

@@ -172,9 +172,40 @@ if out="$(bash "$B/bad/bootstrap-host.sh" --check 2>&1)"; then
 fi
 case "$out" in *"неполный комплект"*) ;; *) fail "bootstrap-host --check: нет ошибки: $out" ;; esac
 
-# make bootstrap-nsd с HOST не должен запускать установку локально
-if MAKEFLAGS= make -s -C "$HERE/.." bootstrap-nsd HOST=dummy >/dev/null 2>&1; then
-    fail "bootstrap-nsd принял HOST и начал локальную установку"
+# bootstrap-* требуют явный HOST и ничего не делают локально без него
+if MAKEFLAGS= make -s -C "$HERE/.." bootstrap-nsd >/dev/null 2>&1; then
+    fail "bootstrap-nsd без HOST"
+fi
+if MAKEFLAGS= make -s -C "$HERE/.." bootstrap-host >/dev/null 2>&1; then
+    fail "bootstrap-host без HOST"
+fi
+
+# bootstrap-nsd копирует скрипт на HOST и запускает его по ssh
+if [ "$(id -u)" != "0" ]; then
+    N="$T/nsd-remote"; mkdir -p "$N/bin"
+    cat > "$N/bin/scp" <<'EOS'
+#!/bin/sh
+cp "$2" "${3#*:}"
+EOS
+    cat > "$N/bin/ssh" <<'EOS'
+#!/bin/sh
+shift 2
+exec bash -c "$1"
+EOS
+    cat > "$N/bin/sudo" <<'EOS'
+#!/bin/sh
+while [ $# -gt 0 ]; do case "$1" in *=*) shift ;; *) break ;; esac; done
+exec "$@"
+EOS
+    chmod +x "$N/bin/scp" "$N/bin/ssh" "$N/bin/sudo"
+    rm -f "/tmp/host2ns-bootstrap-nsd.sh"
+    rc=0
+    out="$(PATH="$N/bin:$PATH" MAKEFLAGS= make -s -C "$HERE/.." bootstrap-nsd HOST=dummy 2>&1)" || rc=$?
+    [ "$rc" -ne 0 ] || fail "bootstrap-nsd: без root установка не должна быть успешной"
+    case "$out" in *"нужен root"*) ;; *) fail "bootstrap-nsd: скрипт не выполнен на HOST: $out" ;; esac
+    [ ! -e "/tmp/host2ns-bootstrap-nsd.sh" ] || fail "bootstrap-nsd: временный файл не удалён"
+else
+    echo "  пропущено: передача bootstrap-nsd по ssh (запуск от root)"
 fi
 
 # dispatcher: NAME и LIB берутся из имени файла.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # bootstrap-nsd.sh — установка и настройка NSD на NS-хосте. Идемпотентен.
-# Запускать на NS-хосте: sudo ./scripts/bootstrap-nsd.sh
+# Обычно вызывается через make bootstrap-nsd HOST=<ns>: скрипт копируется
+# по scp и запускается по SSH под sudo. Прямой запуск на NS тоже возможен.
 set -euo pipefail
 
 NAME="${NAME:-host2ns}"

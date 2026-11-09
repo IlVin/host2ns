@@ -25,7 +25,7 @@
     cp policy.example ~/.host2ns/policy      # необязательно: политика по хостам
 
     make bootstrap-host HOST=<алиас>         # один раз на каждый хост, включая NS
-    make bootstrap-nsd                       # на самом NS, нужен пароль
+    make bootstrap-nsd HOST=<ns>             # на NS по SSH, нужен пароль
     make host2ns                             # без паролей: установка и публикация
     make status                              # зоны, имена, политика
 
@@ -33,10 +33,9 @@
 диспетчер установки и приёмник кладёт `bootstrap-host`. Без него `make host2ns`
 на NS упадёт с подсказкой.
 
-`bootstrap-nsd` ставит NSD на том хосте, где запущен `make`: параметр `HOST`
-этот target не использует. Для удалённого запуска скопируйте
-`scripts/bootstrap-nsd.sh` на NS и выполните его под sudo — `make` подскажет
-готовую команду `scp`/`ssh`.
+Обе bootstrap-команды требуют явный `HOST` и работают по SSH. Локальная
+машина тоже указывается явно, например `make bootstrap-host HOST=user@localhost`
+(на ней должен быть `sshd`). Без `HOST` команда не выполняется.
 
 Ключ каждого отправителя разрешается на NS сам: `make host2ns` кладёт его в
 `authorized_keys` с forced command приёмника (`make authorize HOST=x` — если
@@ -95,9 +94,9 @@
 | `make host2ns` | нет | применяет реестр: установка и публикация |
 | `make status` | нет | зоны, имена с политикой, свежесть публикаций |
 | `make check` | нет | локальные тесты: зоны, приёмник, отправитель, установщики |
-| `make bootstrap-host HOST=x` | да | кладёт код в `/usr/local/lib` и правило sudo |
+| `make bootstrap-host HOST=x` | да | по SSH: код в `/usr/local/lib` и правило sudo |
 | `make authorize HOST=x` | нет | разрешает ключ хоста на NS (обычно делает `make host2ns`) |
-| `make bootstrap-nsd` | да | установка и настройка NSD на этом хосте |
+| `make bootstrap-nsd HOST=x` | да | по SSH: установка и настройка NSD на хосте x |
 | `make restore` | да | перегенерировать зоны из состояния и перечитать NSD |
 | `make prune` | нет | удалить имена хостов, убранных из реестра |
 
