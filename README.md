@@ -24,11 +24,15 @@
     cp registry.example ~/.host2ns/hosts     # хосты и их имена
     cp policy.example ~/.host2ns/policy      # необязательно: политика по хостам
 
-    make bootstrap-host HOST=<алиас>         # один раз на хост, нужен пароль
+    make bootstrap-host HOST=<алиас>         # один раз на каждый хост, включая NS
+    make bootstrap-nsd                       # один раз на NS, нужен пароль
     make host2ns                             # без паролей: установка и публикация
     make status                              # зоны, имена, политика
 
-На NS-хосте один раз: `make bootstrap-host HOST=<ns>` и `sudo make bootstrap-nsd`.
+`bootstrap-host` нужен и NS-хосту: `bootstrap-nsd` ставит только NSD, а
+диспетчер установки и приёмник кладёт `bootstrap-host`. Без него `make host2ns`
+на NS упадёт с подсказкой.
+
 Ключ каждого отправителя разрешается на NS сам: `make host2ns` кладёт его в
 `authorized_keys` с forced command приёмника (`make authorize HOST=x` — если
 нужно повторить вручную).
