@@ -1,0 +1,8 @@
+# Реестр host2ns — пример. Скопируйте в ~/.host2ns/hosts и поправьте.
+#
+# Формат строки:  <хост>   <имена через пробел>
+# Имя = <запись>.<зона>, зона разворачивается в <зона>.<BASE>.
+#
+# ns.example.ru        gw.d.plb
+# web1.example.ru      ssh.h backup.h
+# app.example.ru       tg.d.plb hub.d.plb

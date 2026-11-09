@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# zonegen.sh — генерация зон NSD из состояния и применение конфига.
+# Подключается приёмником и восстановлением; сама ничего не решает.
+set -u
+
+NAME="${NAME:-host2ns}"
+BASE="${BASE:-iv77msk.ru}"
+STATE="${STATE:-/var/lib/$NAME/state}"
+ZONEDIR="${ZONEDIR:-/var/lib/nsd/zones}"
+ZONES_CONF="${ZONES_CONF:-/etc/nsd/nsd.conf.d/10-$NAME-zones.conf}"
+ZONELIST="${ZONELIST:-/run/nsd/zone.list}"
+ZONELIST_CONF="${ZONELIST_CONF:-/etc/nsd/nsd.conf.d/zonelistfile.conf}"
+DRY="${DRY:-0}"
+
+# zone_render <каталог состояния зоны> <файл зоны>
+zone_render() {
+    local d="$1" zf="$2" f n a
+    {
+        printf '$TTL 60\n'
+        printf '@ IN SOA ns.%s. admin.%s. ( %s 3600 600 604800 60 )\n' "$BASE" "$BASE" "$(date +%Y%m%d%H)"
+        printf '@ IN NS ns.%s.\n' "$BASE"
+        for f in "$d"/*; do
+            [ -f "$f" ] || continue
+            while read -r n a; do
+                [ -z "$n" ] && continue
+                case "$a" in
+                    *:*) printf '%s IN AAAA %s\n' "$n" "$a" ;;
+                    *)   printf '%s IN A %s\n' "$n" "$a" ;;
+                esac
+            done < "$f"
+        done
+    } > "$zf"
+    chown nsd:nsd "$zf" 2>/dev/null || true
+}
+
+# zones_apply — перегенерировать зоны и применить конфиг.
+# NO_RESTART=1 — только файлы (режим юнита перед nsd).
+zones_apply() {
+    local d zone zf conf_tmp
+    conf_tmp="$(mktemp)"
+    mkdir -p "$STATE" "$ZONEDIR"
+
+    for d in "$STATE"/*/; do
+        [ -d "$d" ] || continue
+        zone="$(basename "$d")"
+        zf="$ZONEDIR/$zone.zone"
+        zone_render "$d" "$zf"
+        if [ "$DRY" = "1" ]; then printf '[dry] %s\n' "$zf"; continue; fi
+        printf 'zone:\n\tname: "%s"\n\tzonefile: "%s.zone"\n\n' "$zone" "$zone" >> "$conf_tmp"
+    done
+
+    if [ "$DRY" = "1" ]; then rm -f "$conf_tmp"; return 0; fi
+
+    install -d -m 755 "$(dirname "$ZONES_CONF")"
+
+    # zonelistfile — в /run: каталог принадлежит NSD
+    if [ ! -f "$ZONELIST_CONF" ]; then
+        printf 'server:\n\tzonelistfile: "%s"\n' "$ZONELIST" > "$ZONELIST_CONF"
+        chmod 644 "$ZONELIST_CONF"
+    fi
+    install -m 644 "$conf_tmp" "$ZONES_CONF"
+    rm -f "$conf_tmp"
+
+    if [ -f "$ZONELIST" ]; then
+        : > "$ZONELIST"
+        chown nsd:nsd "$ZONELIST" 2>/dev/null || true
+    fi
+    chown -R nsd:nsd "$ZONEDIR" 2>/dev/null || true
+
+    if [ "${NO_RESTART:-0}" = "1" ]; then return 0; fi
+
+    if systemctl is-active --quiet nsd 2>/dev/null; then
+        # reconfig перечитывает состав зон, но не их данные: для данных reload
+        nsd-control reconfig >/dev/null 2>&1 || true
+        nsd-control reload   >/dev/null 2>&1 || systemctl restart nsd >/dev/null 2>&1 || true
+    else
+        systemctl reset-failed nsd >/dev/null 2>&1 || true
+        systemctl start nsd >/dev/null 2>&1 || true
+    fi
+}

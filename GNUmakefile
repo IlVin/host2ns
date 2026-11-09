@@ -1,0 +1,42 @@
+# host2ns — публикация имён хостов в NSD по SSH.
+#
+# Реестр у разработчика: ~/.host2ns/config и ~/.host2ns/hosts.
+# В репозитории только примеры.
+
+NAME         ?= host2ns
+BASE         ?= iv77msk.ru
+HOST2NS_HOME ?= $(HOME)/.$(NAME)
+
+.PHONY: help host2ns status check bootstrap-nsd bootstrap-host restore
+
+help:
+	@echo "make host2ns          применить реестр: установить/обновить на всех хостах"
+	@echo "make status           состояние: зоны, имена, свежесть публикаций"
+	@echo "make check            локальная проверка генерации зон"
+	@echo "make bootstrap-host HOST=x  подготовить хост: скрипты + NOPASSWD"
+	@echo "make bootstrap-nsd    установить и настроить NSD на этом хосте"
+	@echo "make restore          перегенерировать зоны из состояния"
+	@echo ""
+	@echo "реестр: $(HOST2NS_HOME)/config и $(HOST2NS_HOME)/hosts"
+
+host2ns:
+	@set -o pipefail; NAME=$(NAME) BASE=$(BASE) HOST2NS_HOME=$(HOST2NS_HOME) ./scripts/publish.sh 2>&1 | cat
+
+status:
+	@NAME=$(NAME) BASE=$(BASE) HOST2NS_HOME=$(HOST2NS_HOME) ./scripts/status.sh
+
+bootstrap-host:
+	@test -n "$(HOST)" || { echo "нужен HOST=<алиас>" >&2; exit 2; }
+	@tar -czf /tmp/$(NAME)-boot.tgz -C scripts .
+	@scp -q /tmp/$(NAME)-boot.tgz "$(HOST):/tmp/$(NAME)-boot.tgz"
+	@ssh -tt "$(HOST)" "rm -rf /tmp/$(NAME)-boot && mkdir -p /tmp/$(NAME)-boot && tar -xzf /tmp/$(NAME)-boot.tgz -C /tmp/$(NAME)-boot && sudo NAME=$(NAME) bash /tmp/$(NAME)-boot/bootstrap-host.sh" 2>&1 | cat
+	@rm -f /tmp/$(NAME)-boot.tgz
+
+restore:
+	@. $(HOST2NS_HOME)/config; ssh -t "$$NS" 'sudo systemctl restart $(NAME)-zones.service && systemctl is-active nsd'
+
+bootstrap-nsd:
+	@sudo NAME=$(NAME) BASE=$(BASE) ./scripts/bootstrap-nsd.sh
+
+check:
+	@bash scripts/check.sh
