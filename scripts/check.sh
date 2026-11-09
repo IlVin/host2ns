@@ -8,6 +8,12 @@ trap 'rm -rf "$T"' EXIT
 
 fail() { echo "ОШИБКА: $*" >&2; exit 1; }
 
+# синтаксис всех скриптов — до любых запусков
+for f in "$HERE"/*.sh; do
+    bash -n "$f" || fail "bash -n: $f"
+done
+echo "  синтаксис: ok"
+
 # recv_run <каталог> [VAR=value...] — приёмник в изолированном окружении.
 # BASE задаётся файлом <каталог>/base, как на NS.
 recv_run() {
@@ -31,6 +37,7 @@ printf 'ssh 2a02:2168::1111\nbackup 2a02:2168::1111\n' > "$STATE/h.example.ru/ho
 
 # shellcheck disable=SC1091
 . "$HERE/zonegen.sh"
+: > "$ZONELIST"   # NSD мог создать его раньше; генерация обязана обнулить
 NO_RESTART=1 zones_apply
 
 zf="$ZONEDIR/plb.example.ru.zone"
@@ -44,6 +51,7 @@ grep -q 'tg.d IN AAAA 2a02:2168::1111' "$zf" || fail "нет записи tg.d"
 [ -f "$ZONEDIR/h.example.ru.zone" ] || fail "нет зоны h"
 grep -q 'name: "plb.example.ru"' "$ZONES_CONF" || fail "нет блока зоны в конфиге"
 [ ! -s "$ZONELIST" ] || fail "рантайм-список должен быть пуст"
+grep -q 'zonelistfile' "$ZONELIST_CONF" || fail "нет zonelistfile в конфиге"
 [ "$(stat -c %a "$zf")" = 644 ] || fail "файл зоны не 644"
 if find "$ZONEDIR" -maxdepth 1 -name '.*' -type f | grep -q .; then
     fail "остался временный файл зоны"
