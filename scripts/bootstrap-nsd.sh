@@ -42,13 +42,46 @@ nsd_listen() {
     fi
 }
 
+# main_ip_addrs — ip-address, уже заданные в main-конфиге и чужих
+# drop-in'ах. Свой 00-файл на время чтения убираем, иначе увидим сами себя.
+main_ip_addrs() {
+    command -v nsd-checkconf >/dev/null 2>&1 || return 0
+    [ -f /etc/nsd/nsd.conf ] || return 0
+    local tmp="" out
+    if [ -f "$CONF" ]; then
+        tmp="$(mktemp "$(dirname "$CONF")/.00-$NAME-addr.XXXXXX")" || return 0
+        mv -f "$CONF" "$tmp"
+    fi
+    out="$(nsd-checkconf -o ip-address /etc/nsd/nsd.conf 2>/dev/null || true)"
+    [ -z "$tmp" ] || mv -f "$tmp" "$CONF"
+    printf '%s\n' "$out" | sed 's/@.*//' | tr '\n' ' '
+}
+
 # nsd_config — конфиг NSD, который пишет установщик. Печатается в stdout,
 # чтобы тесты могли проверить его через nsd-checkconf без root.
+# Адреса, уже заданные в main-конфиге (старая установка), не повторяем:
+# иначе NSD биндит адрес дважды и падает с EADDRINUSE, а в ss пусто.
 nsd_config() {
+    local exclude line addr
+    exclude="$(main_ip_addrs)"
     printf 'server:\n'
     printf '\tdo-ip4: yes\n'
     printf '\tdo-ip6: yes\n'
-    nsd_listen
+    case " $exclude " in
+        *" 0.0.0.0 "*|*" :: "*)
+            # main уже биндит wildcard; добавлять конкретные адреса нельзя
+            ;;
+        *)
+            nsd_listen | while IFS= read -r line; do
+                addr="${line#*ip-address: }"
+                addr="${addr%@53}"
+                case " $exclude " in
+                    *" $addr "*) continue ;;
+                esac
+                printf '%s\n' "$line"
+            done
+            ;;
+    esac
     printf '\tzonesdir: "%s"\n' "$ZONESDIR"
     printf '\n'
     printf 'remote-control:\n'
@@ -145,6 +178,18 @@ if [ "$got" != "$ZONESDIR" ]; then
         echo "  конфиг не подхвачен; оставлен прежний" >&2
     fi
     die "конфиг не подхвачен: zonesdir=$got (проверьте include в /etc/nsd/nsd.conf)"
+fi
+
+# адрес, продублированный в main и drop-in, NSD биндит дважды: второй bind
+# даёт EADDRINUSE, процесс выходит, и в ss не остаётся никого
+dup="$(nsd-checkconf -o ip-address /etc/nsd/nsd.conf 2>/dev/null | sort | uniq -d)"
+if [ -n "$dup" ]; then
+    if [ -n "$old_conf" ] && [ -f "$old_conf" ]; then
+        cp -p "$old_conf" "$CONF"
+        rm -f "$old_conf"
+        echo "  ip-address дублируется; оставлен прежний конфиг" >&2
+    fi
+    die "ip-address дублируется: $dup (уберите дубль из /etc/nsd/nsd.conf или drop-in)"
 fi
 
 # show_port_owner — кто держит 53 и что с этим делать.

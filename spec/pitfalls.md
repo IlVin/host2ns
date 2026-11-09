@@ -25,6 +25,7 @@
 | `pgrep/pkill -x nsd` ничего не находит | NSD переименовывает потоки в `nsd: main`, `nsd: server 1`, `nsd: xfrd` | PID брать из `ss`, проверять `/proc/PID/exe`, затем `kill` |
 | старый NSD вне systemd держит адрес | скрипт стартовал второй экземпляр и падал на bind | takeover: остановить unit и старый процесс по PID из `ss`, дождаться, затем start |
 | старый NSD держит адрес, но в `ss` его нет | сокет/процесс в другом network namespace | `make nsd-who HOST=<ns>`; вручную `nsenter -t <pid> -n ss`; процесс — через `pgrep -f` и `/proc/PID/exe` |
+| `can't bind udp socket <addr>@53: Address already in use`, а `ss` пуст | `ip-address` продублирован в main-конфиге и `00`; NSD биндит его дважды и выходит | `bootstrap-nsd` исключает адреса main (`main_ip_addrs`) и проверяет `uniq -d` |
 | новые имена не видны, помогает только restart nsd | nsd-control reconfig перечитывает **конфиг**, а не данные зон | добавить nsd-control reload |
 | дубль зоны в двух конфигах | остался конфиг прежнего проекта | один файл конфигурации на проект |
 
