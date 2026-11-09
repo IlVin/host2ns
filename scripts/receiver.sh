@@ -54,11 +54,24 @@ is_public_ipv4() {
 }
 
 is_ipv6() {
-    local ip="$1"
-    [[ "$ip" == *:* ]] || return 1
-    [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]] || return 1
-    # разбор адреса отдаём libc: свой парсер IPv6 слишком легко ошибается
-    timeout 2 getent ahosts "$ip" >/dev/null 2>&1
+    # Разбираем сами: getent зависит от включённого IPv6 в ядре, а NS может
+    # жить с выключенным IPv6 и всё равно обслуживать зоны с AAAA.
+    awk -v ip="$1" 'BEGIN {
+        if (ip == "" || ip !~ /^[0-9A-Fa-f:]+$/ || ip !~ /:/) exit 1
+        n = split(ip, parts, "::")
+        if (n > 2) exit 1
+        total = 0
+        for (i = 1; i <= n; i++) {
+            if (parts[i] == "") continue
+            m = split(parts[i], group, ":")
+            for (j = 1; j <= m; j++) {
+                if (group[j] == "" || length(group[j]) > 4 || group[j] !~ /^[0-9A-Fa-f]+$/) exit 1
+                total++
+            }
+        }
+        if (n == 1) exit (total == 8 ? 0 : 1)
+        exit (total < 8 ? 0 : 1)
+    }'
 }
 
 is_public_ipv6() {

@@ -323,7 +323,9 @@ R="$T/recv-bad"
 mkdir -p "$R"
 printf 'example.ru\n' > "$R/base"
 for bad in 999.999.999.999 1.2.3.4.5 ::: 10.0.0.1 192.168.1.5 172.20.0.1 \
-           100.64.0.1 fe80::1 fc00::1 ff02::1 0.0.0.0 example.com; do
+           100.64.0.1 fe80::1 fc00::1 ff02::1 0.0.0.0 example.com \
+           1:2:3 1::2::3 12345:: 1:2:3:4:5:6:7:8:9 1:2:3:4:5:6:7:8:: \
+           1:2:3:4:5:6:7::8 2001:db8::g :1:2:3:4:5:6:7; do
     if recv_run "$R" >/dev/null 2>&1 <<EOF
 host h-bad
 policy ipv6,ipv4
