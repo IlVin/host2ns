@@ -156,6 +156,17 @@ if HOST2NS_HOME="$P/home" PATH="$P/bin:$PATH" NAME=check bash "$HERE/publish.sh"
     fail "publish принял плохое имя из реестра"
 fi
 
+# bootstrap-host: неполный комплект отвергается до root-действий
+B="$T/boot"; mkdir -p "$B/ok" "$B/bad"
+for f in host2ns.sh install-sender.sh install-ns.sh receiver.sh rebuild.sh zonegen.sh host2ns-install.sh bootstrap-host.sh; do
+    cp "$HERE/$f" "$B/ok/$f"
+done
+out="$(SUDO_USER=alice bash "$B/ok/bootstrap-host.sh" 2>&1 || true)"
+case "$out" in *"нужен root"*) ;; *) fail "bootstrap-host: не дошёл до проверки root: $out" ;; esac
+cp "$HERE/bootstrap-host.sh" "$B/bad/bootstrap-host.sh"
+out="$(SUDO_USER=alice bash "$B/bad/bootstrap-host.sh" 2>&1 || true)"
+case "$out" in *"неполный комплект"*) ;; *) fail "bootstrap-host: принял неполный комплект: $out" ;; esac
+
 # dispatcher: NAME и LIB берутся из имени файла.
 ln -s "$HERE/host2ns-install.sh" "$T/foo-install.sh"
 out="$(bash "$T/foo-install.sh" sender 2>&1 || true)"

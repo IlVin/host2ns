@@ -7,14 +7,23 @@ set -euo pipefail
 NAME="${NAME:-host2ns}"
 SENDER="${SUDO_USER:-${1:-}}"
 [ -n "$SENDER" ] || { echo "не удалось определить пользователя" >&2; exit 2; }
-[ "$(id -u)" = "0" ] || { echo "нужен root" >&2; exit 2; }
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 LIB="/usr/local/lib/$NAME"
-install -d -m 755 "$LIB"
+FILES="host2ns.sh install-sender.sh install-ns.sh receiver.sh rebuild.sh zonegen.sh"
 
-for f in host2ns.sh install-sender.sh install-ns.sh receiver.sh rebuild.sh zonegen.sh; do
-    [ -f "$SRC/$f" ] && install -m 755 -o root -g root "$SRC/$f" "$LIB/$f"
+# комплект проверяем до root-действий: неполный тарбол не должен ставить
+# половину установщика и рапортовать успех
+for f in $FILES; do
+    [ -f "$SRC/$f" ] || { echo "нет $SRC/$f — неполный комплект установщика" >&2; exit 1; }
+done
+[ -f "$SRC/host2ns-install.sh" ] || { echo "нет $SRC/host2ns-install.sh" >&2; exit 1; }
+
+[ "$(id -u)" = "0" ] || { echo "нужен root" >&2; exit 2; }
+
+install -d -m 755 "$LIB"
+for f in $FILES; do
+    install -m 755 -o root -g root "$SRC/$f" "$LIB/$f"
 done
 
 install -m 755 -o root -g root "$SRC/host2ns-install.sh" "/usr/local/bin/$NAME-install.sh"
