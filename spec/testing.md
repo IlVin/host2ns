@@ -58,3 +58,26 @@
 - NAT-хост: `A` содержит публичный адрес роутера из `SSH_CONNECTION`;
 - политика `ipv6` на хосте с публичным IPv4 — записи `A` нет;
 - `sudo -n <диспетчер>` работает без пароля, `sudo -n /bin/sh` — нет.
+
+## 7.5. Стенд на Docker
+
+Проверка на «голых» Ubuntu 24.04 и Debian 12: три гостя с systemd в одной сети —
+NS, отправитель и рабочая машина. У каждого гостя свой пользователь `ilvin` с
+sudo и ключом оператора; NS и отправитель адресуются по именам из `/etc/hosts`.
+
+    make bootstrap-host HOST=<ns>      # на NS, нужен пароль
+    make bootstrap-nsd                 # на NS, нужен пароль
+    make bootstrap-host HOST=<host>    # на каждом отправителе, нужен пароль
+    make host2ns                       # на рабочей машине
+    make status
+    make restore
+    make prune
+
+Проверено: install → publish → `dig` A/AAAA → `make status` → `make restore` →
+`make prune` → повторное добавление хоста. На Debian 12 отдельно проверены
+`bootstrap-nsd`, `install-ns` и приёмник (NSD 4.6.1); на Ubuntu 24.04 — вся
+цепочка, включая ключи и таймер (NSD 4.8.0).
+
+Ограничение стенда: Docker держит `127.0.0.11:53` в пользовательской сети, а на
+Ubuntu ещё и `systemd-resolved`; на NS их надо отключить (§6.1), иначе NSD не
+забиндит 53.
