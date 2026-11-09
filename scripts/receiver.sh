@@ -31,6 +31,53 @@ trap 'rm -rf "$TMPD"' EXIT
 
 add_record() { printf '%s %s\n' "$2" "$3" >> "$TMPD/$1"; }
 
+# --- проверка адресов --------------------------------------------------------
+# Строка из зоны должна быть настоящим глобальным адресом: иначе одна
+# опечатка делает зону невалидной и NSD перестаёт её загружать.
+is_ipv4() {
+    local ip="$1" o
+    [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+    local IFS=.
+    for o in $ip; do
+        [[ "$o" =~ ^(0|[1-9][0-9]{0,2})$ ]] || return 1
+        [ "$o" -le 255 ] || return 1
+    done
+}
+
+is_public_ipv4() {
+    case "$1" in
+        0.*|10.*|127.*|169.254.*|192.168.*) return 1 ;;
+        172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 1 ;;
+        100.6[4-9].*|100.[7-9][0-9].*|100.1[01][0-9].*|100.12[0-7].*) return 1 ;;
+        22[4-9].*|23[0-9].*|24[0-9].*|25[0-5].*) return 1 ;;
+    esac
+}
+
+is_ipv6() {
+    local ip="$1"
+    [[ "$ip" == *:* ]] || return 1
+    [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]] || return 1
+    # разбор адреса отдаём libc: свой парсер IPv6 слишком легко ошибается
+    timeout 2 getent ahosts "$ip" >/dev/null 2>&1
+}
+
+is_public_ipv6() {
+    case "$1" in
+        ::|::1) return 1 ;;
+        [fF][cCdD]*) return 1 ;;                                   # fc00::/7
+        [fF][eE]8*|[fF][eE]9*|[fF][eE][aA]*|[fF][eE][bB]*) return 1 ;; # fe80::/10
+        [fF][fF]*) return 1 ;;                                     # ff00::/8
+    esac
+}
+
+addr_ok() {
+    if [[ "$1" == *:* ]]; then
+        is_ipv6 "$1" && is_public_ipv6 "$1"
+    else
+        is_ipv4 "$1" && is_public_ipv4 "$1"
+    fi
+}
+
 while read -r a b rest; do
     [ -z "${a:-}" ] && continue
     case "$a" in
@@ -47,7 +94,7 @@ while read -r a b rest; do
     grep -qxF "$rel" "$META/$zone" 2>/dev/null || printf '%s\n' "$rel" >> "$META/$zone"
     for addr in $addrs; do
         [ -z "$addr" ] && continue
-        [[ "$addr" =~ ^[0-9a-fA-F:]+$ || "$addr" =~ ^[0-9.]+$ ]] || { echo "плохой адрес: $addr" >&2; exit 2; }
+        addr_ok "$addr" || { echo "плохой адрес: $addr" >&2; exit 2; }
         add_record "$zone" "$rel" "$addr"
     done
 done
@@ -59,18 +106,17 @@ ID="$(printf '%s' "$ID" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9-')"
 if printf '%s' "$POLICY" | tr ',' '\n' | grep -qx nat; then
     seen="${SSH_CONNECTION:-}"
     seen="${seen%% *}"
-    case "$seen" in
-        *:*) : ;;                       # IPv6 — не наш случай
-        '') : ;;
-        *)  for mf in "$META"/*; do
-                [ -f "$mf" ] || continue
-                zone="$(basename "$mf")"
-                while read -r rel; do
-                    [ -z "$rel" ] && continue
-                    add_record "$zone" "$rel" "$seen"
-                done < "$mf"
-            done ;;
-    esac
+    # IPv6 и приватный IPv4 из SSH_CONNECTION в DNS не публикуем
+    if [[ "$seen" != *:* ]] && is_ipv4 "$seen" && is_public_ipv4 "$seen"; then
+        for mf in "$META"/*; do
+            [ -f "$mf" ] || continue
+            zone="$(basename "$mf")"
+            while read -r rel; do
+                [ -z "$rel" ] && continue
+                add_record "$zone" "$rel" "$seen"
+            done < "$mf"
+        done
+    fi
 fi
 
 # Зоны, которые хост объявил в этом сеансе.

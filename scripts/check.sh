@@ -135,6 +135,33 @@ case "$out" in *"sender|ns"*) ;; *) fail "dispatcher: нет подсказки 
 [ "$(bash "$HERE/install-sender.sh" --print-user)" = "$(id -un)" ] \
     || fail "install-sender: RUN_USER по умолчанию"
 
+# приёмник отвергает не-IP и служебные диапазоны
+R="$T/recv-bad"
+mkdir -p "$R"
+printf 'example.ru\n' > "$R/base"
+for bad in 999.999.999.999 1.2.3.4.5 ::: 10.0.0.1 192.168.1.5 172.20.0.1 \
+           100.64.0.1 fe80::1 fc00::1 ff02::1 0.0.0.0 example.com; do
+    if recv_run "$R" >/dev/null 2>&1 <<EOF
+host h-bad
+policy ipv6,ipv4
+tg.d.plb $bad
+EOF
+    then
+        fail "приёмник принял адрес $bad"
+    fi
+done
+# nat с приватным адресом из SSH_CONNECTION не публикуется
+R="$T/recv-nat-private"
+mkdir -p "$R"
+printf 'example.ru\n' > "$R/base"
+recv_run "$R" SSH_CONNECTION='10.0.0.5 1234 10.0.0.1 22' >/dev/null <<'EOF' \
+    || fail "nat с приватным адресом упал"
+host h-priv
+policy nat
+tg.d.plb
+EOF
+[ ! -e "$R/state/plb.example.ru/h-priv" ] || fail "nat опубликовал приватный адрес"
+
 # authorize.sh: строка authorized_keys с forced command.
 ssh-keygen -t ed25519 -N "" -C "check@test" -f "$T/ak" >/dev/null 2>&1 || fail "ssh-keygen"
 line="$(NAME=check bash "$HERE/authorize.sh" --print-line "$(cat "$T/ak.pub")")"
