@@ -47,9 +47,18 @@ chown nsd:nsd /var/lib/nsd "$ZONESDIR"
 
 echo "== конфиг"
 # временный файл рядом с целевым: замена атомарна для NSD
-nsd_config > "$CONF.tmp"
-chmod 644 "$CONF.tmp"
-mv -f "$CONF.tmp" "$CONF"
+tmp_conf="$(mktemp "$(dirname "$CONF")/.00-$NAME.XXXXXX")"
+nsd_config > "$tmp_conf"
+chmod 644 "$tmp_conf"
+config_changed=1
+if [ -f "$CONF" ] && cmp -s "$tmp_conf" "$CONF"; then
+    config_changed=0
+    rm -f "$tmp_conf"
+    echo "  конфиг не изменился"
+else
+    mv -f "$tmp_conf" "$CONF"
+    echo "  конфиг обновлён"
+fi
 
 echo "== ключи nsd-control"
 # в дистрибутивах ключи обычно создаёт postinst; повторный вызов безвреден
@@ -60,15 +69,47 @@ nsd-checkconf /etc/nsd/nsd.conf
 got="$(nsd-checkconf -o zonesdir /etc/nsd/nsd.conf)"
 [ "$got" = "$ZONESDIR" ] || die "конфиг не подхвачен: zonesdir=$got (проверьте include в /etc/nsd/nsd.conf)"
 
+# show_port_owner — кто держит 53 и что с этим делать.
+show_port_owner() {
+    local out
+    command -v ss >/dev/null 2>&1 || return 0
+    out="$( { ss -lnup 'sport = :53' 2>/dev/null; ss -lntp 'sport = :53' 2>/dev/null; } | grep -v '^State' )"
+    [ -n "$out" ] || return 0
+    echo "порт 53 занят:" >&2
+    printf '%s\n' "$out" >&2
+    case "$out" in
+        *systemd-resolve*)
+            echo "это systemd-resolved. На выделенном DNS его отключают:" >&2
+            echo "  sudo systemctl disable --now systemd-resolved" >&2
+            echo "или выключают только stub-listener:" >&2
+            echo "  sudo mkdir -p /etc/systemd/resolved.conf.d" >&2
+            echo "  printf '[Resolve]\\nDNSStubListener=no\\n' | sudo tee /etc/systemd/resolved.conf.d/no-stub.conf" >&2
+            echo "  sudo systemctl restart systemd-resolved" >&2
+            echo "  # затем проверьте /etc/resolv.conf: он не должен указывать в 127.0.0.53" >&2
+            ;;
+        *nsd*)
+            echo "это NSD: служба не остановилась или процесс запущен вне systemd." >&2
+            echo "  sudo systemctl status nsd; sudo journalctl -u nsd -n 30" >&2
+            ;;
+    esac
+}
+
 echo "== запуск"
 systemctl enable nsd >/dev/null 2>&1 || true
-# конфиг мог измениться: перезапуск применяет его и к уже работающему NSD
-systemctl restart nsd >/dev/null 2>&1 || systemctl start nsd >/dev/null 2>&1 || true
+# после неудачных стартов systemd держит start-limit; снимаем его перед попыткой
+systemctl reset-failed nsd >/dev/null 2>&1 || true
+if [ "$config_changed" = "0" ] && systemctl is-active --quiet nsd; then
+    # повторный запуск не должен трогать работающий NSD
+    echo "  NSD уже работает, конфиг не менялся — перезапуск не нужен"
+elif systemctl is-active --quiet nsd; then
+    systemctl restart nsd >/dev/null 2>&1 || true
+else
+    systemctl start nsd >/dev/null 2>&1 || true
+fi
+
 if ! systemctl is-active --quiet nsd; then
-    # на Ubuntu/Debian порт 53 часто держит systemd-resolved (127.0.0.53:53)
-    if command -v ss >/dev/null && ss -lnu 'sport = :53' 2>/dev/null | grep -q ':53 '; then
-        echo "подсказка: порт 53 уже занят (обычно systemd-resolved); освободите его" >&2
-    fi
+    show_port_owner
+    journalctl -u nsd -n 20 --no-pager >&2 || true
     die "NSD не поднялся: journalctl -u nsd"
 fi
 echo "готово: NSD настроен (NAME=$NAME, BASE=$BASE)"

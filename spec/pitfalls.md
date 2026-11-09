@@ -11,7 +11,7 @@
 | could not open zone list /var/lib/nsd/zone.list: Permission denied | файл создан root, служба читает под nsd | zonelistfile в /run/nsd |
 | `nsd-checkconf: at '\tdo-ip4:' syntax error` | в heredoc без кавычек `\t` — два символа, а не табуляция | печатать конфиг через `printf`, проверять `cat -A` |
 | `nsd-checkconf: at 'listen:' syntax error` | `listen` — директива BIND/Knot | у NSD `ip-address:` (или `interface:`) |
-| `can't bind 0.0.0.0@53: Address already in use` | на Ubuntu/Debian порт держит `systemd-resolved` (127.0.0.53:53) | отключить резолвер на выделенном DNS или освободить порт |
+| `can't bind 0.0.0.0@53: Address already in use` | на Ubuntu/Debian порт часто держит `systemd-resolved` (127.0.0.53:53), но может и старый `nsd` | скрипт показывает владельца через `ss` и команды; резолвер отключают или переводят в `DNSStubListener=no` |
 | зоны создались с чужим доменом | BASE не доходит до forced command; остаётся дефолт | BASE в `/etc/<NAME>/base`, читать в `zonegen` |
 | имя осталось в старой зоне | приёмник заменял файл только в зонах нового payload | сверять весь объявленный набор зон |
 | пустая зона висит в конфиге | удалялись файлы, но не каталоги | не обслуживать пустые каталоги и удалять их |
@@ -19,7 +19,8 @@
 | AAAA отвергается на NS с выключенным IPv6 | проверка через `getent ahosts` зависит от стека ядра | разбирать IPv6 синтаксически, без `getent` |
 | «ok», но NSD не перечитал данные | ошибки `nsd-control`/`systemctl` глушились `|| true` | возвращать ошибку, если NSD не активен |
 | zonegen: Permission denied в ExecStartPre | в старых пакетах песочница nsd запрещала запись | генерация отдельным юнитом `Before=nsd`; в актуальных пакетах есть `ReadWritePaths`, но полагаться на это не хотим |
-| start request repeated too quickly | systemd блокирует юнит после пяти падений | systemctl reset-failed nsd |
+| start request repeated too quickly | systemd блокирует юнит после пяти падений | `bootstrap-nsd` делает `systemctl reset-failed nsd` перед запуском; вручную — та же команда |
+| повторный `bootstrap-nsd` перезапускал рабочий NSD | конфиг не сравнивался с текущим | сравнение через `cmp`; без изменений NSD не трогается |
 | новые имена не видны, помогает только restart nsd | nsd-control reconfig перечитывает **конфиг**, а не данные зон | добавить nsd-control reload |
 | дубль зоны в двух конфигах | остался конфиг прежнего проекта | один файл конфигурации на проект |
 
