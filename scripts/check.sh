@@ -258,6 +258,14 @@ grep -q '^policy ipv6,ipv4$' "$S/capture" || fail "пустой набор: не
 recv_run "$R" < "$S/capture" >/dev/null || fail "приёмник не принял пустой набор"
 [ ! -e "$R/state/plb.example.ru/h1" ] || fail "пустой набор не удалил имена"
 
+# смена NS должна вызвать переотправку, даже если адреса не менялись
+: > "$S/capture"
+env PATH="$S/bin-empty:$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check \
+    CFG="$S/etc" STATE="$S/var/last" NS=user2@ns bash "$HERE/host2ns.sh" \
+    || fail "отправитель не отработал после смены NS"
+[ -s "$S/capture" ] || fail "смена NS не вызвала переотправку"
+grep -q '^host h1$' "$S/capture" || fail "после смены NS нет данных"
+
 # приёмник отвергает не-IP и служебные диапазоны
 R="$T/recv-bad"
 mkdir -p "$R"

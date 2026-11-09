@@ -111,7 +111,8 @@ main() {
         for n in "${names_arr[@]}"; do names+="$n,"; done
     fi
 
-    local cur="v2|$id|$addr6|$addr4|$nat|$FAMILY|$names"
+    # NS в ключе: смена приёмника должна вызвать переотправку
+    local cur="v3|$id|$NS|$addr6|$addr4|$nat|$FAMILY|$names"
     if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$cur" ]; then exit 0; fi
 
     {
