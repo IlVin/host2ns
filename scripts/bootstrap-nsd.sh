@@ -59,6 +59,7 @@ got="$(nsd-checkconf -o zonesdir /etc/nsd/nsd.conf)"
 
 echo "== запуск"
 systemctl enable nsd >/dev/null 2>&1 || true
-systemctl is-active --quiet nsd || systemctl start nsd || true
+# конфиг мог измениться: перезапуск применяет его и к уже работающему NSD
+systemctl restart nsd >/dev/null 2>&1 || systemctl start nsd >/dev/null 2>&1 || true
 systemctl is-active --quiet nsd || die "NSD не поднялся: journalctl -u nsd"
 echo "готово: NSD настроен (NAME=$NAME, BASE=$BASE)"
