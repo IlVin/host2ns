@@ -28,12 +28,14 @@ HOSTS="$H2H/hosts"
 
 declare -A FAM
 if [ -f "$H2H/policy" ]; then
-    while read -r h f; do
-        case "$h" in ''|\#*) continue ;; esac
-        FAM["$h"]="$f"
+    while read -r line; do
+        line="${line%%#*}"
+        read -r h f <<< "$line"
+        [ -n "${h:-}" ] || continue
+        FAM["$h"]="$(printf '%s' "${f:-}" | tr -d '[:space:]')"
     done < "$H2H/policy"
 fi
-fam_of() { printf '%s' "${FAM[$1]:-$FAMILY}"; }
+fam_of() { printf '%s' "${FAM[$1]:-$FAMILY}" | tr -d '[:space:]'; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 mapfile -t LINES < "$HOSTS"
@@ -51,14 +53,15 @@ ssh -n "$NS" "sudo -n $RUNNER ns --name '$NAME' --base '$BASE'" \
     || install_failed "$NS"
 
 install_sender() { # <хост> [доп. аргументы установщика]
-    ssh -n "$1" "sudo -n $RUNNER sender --ns '$NS' --id '$1' --names '$names' --name '$NAME' --family '$fam' $2" \
+    local extra="${2:-}"
+    ssh -n "$1" "sudo -n $RUNNER sender --ns '$NS' --id '$1' --names '$names' --name '$NAME' --family '$fam' $extra" \
         || install_failed "$1"
 }
 
 for line in "${LINES[@]}"; do
-    [ -z "${line:-}" ] && continue
-    case "$line" in \#*) continue ;; esac
+    line="${line%%#*}"
     read -r host names <<< "$line"
+    [ -z "${host:-}" ] && continue
     [ -n "$host" ] || continue
     [[ "$host" != -* && "$host" =~ ^[A-Za-z0-9._-]+$ ]] \
         || { echo "плохой хост в реестре: $host" >&2; exit 2; }

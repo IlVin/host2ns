@@ -312,6 +312,26 @@ case "$out" in *"make bootstrap-host HOST=web1"*) ;; *) fail "publish: нет п
 case "$out" in *"нет доступа"*) fail "publish: ошибка установщика замаскирована" ;; esac
 grep -q 'user@ns' "$P/log" || fail "publish: NS без пользователя из config"
 
+# publish: комментарии в реестре и policy не попадают в аргументы
+P="$T/pub-ok"
+mkdir -p "$P/home" "$P/bin"
+ssh-keygen -t ed25519 -N "" -C check -f "$P/k" >/dev/null 2>&1 || fail "ssh-keygen"
+printf 'NS=user@ns\nBASE=example.ru\n' > "$P/home/config"
+printf 'web1 tg.d.plb # основной\n' > "$P/home/hosts"
+printf 'web1 ipv4 # только v4\n' > "$P/home/policy"
+cat > "$P/bin/ssh" <<'EOS'
+#!/bin/sh
+printf '%s\n' "$*" >> "$SSH_LOG"
+case "$*" in *key.pub*) cat "$FAKE_PUB" ;; esac
+exit 0
+EOS
+chmod +x "$P/bin/ssh"
+HOST2NS_HOME="$P/home" PATH="$P/bin:$PATH" SSH_LOG="$P/log" FAKE_PUB="$P/k.pub" \
+    NAME=check bash "$HERE/publish.sh" >/dev/null || fail "publish с комментариями упал"
+grep -q "sender.*--names 'tg.d.plb'.*--family 'ipv4'" "$P/log" \
+    || fail "publish: комментарий попал в --names/--family"
+if grep -q '#' "$P/log"; then fail "publish: комментарий ушёл на хост"; fi
+
 # status: комментарии в реестре, политика, пропуск самого NS
 P="$T/status"
 mkdir -p "$P/home" "$P/bin"
