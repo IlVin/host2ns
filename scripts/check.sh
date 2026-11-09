@@ -85,6 +85,17 @@ policy ipv6
 EOF
 [ ! -e "$R/state/plb.example.ru/h-nat6" ] || fail "пустой набор не удалил имена"
 
+# authorize.sh: строка authorized_keys с forced command.
+ssh-keygen -t ed25519 -N "" -C "check@test" -f "$T/ak" >/dev/null 2>&1 || fail "ssh-keygen"
+line="$(NAME=check bash "$HERE/authorize.sh" --print-line "$(cat "$T/ak.pub")")"
+case "$line" in
+    'restrict,command="sudo -n /usr/local/bin/check-recv.sh" ssh-ed25519 '*) ;;
+    *) fail "authorize: плохая строка: $line" ;;
+esac
+if NAME=check bash "$HERE/authorize.sh" --print-line "not a key" >/dev/null 2>&1; then
+    fail "authorize: принял мусор вместо ключа"
+fi
+
 # Конфиг NSD из bootstrap-nsd: проверяем настоящим nsd-checkconf, если он есть.
 bash "$HERE/bootstrap-nsd.sh" --print-config > "$T/00-check.conf"
 grep -q $'^\tdo-ip4: yes$' "$T/00-check.conf" || fail "в конфиге NSD нет реальной табуляции"

@@ -28,7 +28,10 @@
     make host2ns                             # без паролей: установка и публикация
     make status                              # зоны, имена, политика
 
-На NS-хосте один раз: `sudo make bootstrap-nsd`.
+На NS-хосте один раз: `make bootstrap-host HOST=<ns>` и `sudo make bootstrap-nsd`.
+Ключ каждого отправителя разрешается на NS сам: `make host2ns` кладёт его в
+`authorized_keys` с forced command приёмника (`make authorize HOST=x` — если
+нужно повторить вручную).
 
 ## Семейство адресов
 
@@ -80,6 +83,7 @@
 | `make status` | нет | зоны, имена с политикой, свежесть публикаций |
 | `make check` | нет | локальный тест генерации зон |
 | `make bootstrap-host HOST=x` | да | кладёт код в `/usr/local/lib` и правило sudo |
+| `make authorize HOST=x` | нет | разрешает ключ хоста на NS (обычно делает `make host2ns`) |
 | `make bootstrap-nsd` | да | установка и настройка NSD на этом хосте |
 | `make restore` | да | перегенерировать зоны из состояния |
 

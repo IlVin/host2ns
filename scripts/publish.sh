@@ -27,9 +27,11 @@ if [ -f "$H2H/policy" ]; then
 fi
 fam_of() { printf '%s' "${FAM[$1]:-$FAMILY}"; }
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 mapfile -t LINES < "$HOSTS"
 NS_HOST="${NS#*@}"
 RUNNER="/usr/local/bin/$NAME-install.sh"
+CFG="/etc/$NAME"
 
 need_bootstrap() {
     echo "нет доступа на $1: сделайте make bootstrap-host HOST=$1" >&2
@@ -40,6 +42,11 @@ echo "== $NS_HOST: приёмник"
 ssh -n "$NS_HOST" "sudo -n $RUNNER ns --name '$NAME' --base '$BASE'" \
     || need_bootstrap "$NS_HOST"
 
+install_sender() { # <хост> [доп. аргументы установщика]
+    ssh -n "$1" "sudo -n $RUNNER sender --ns '$NS' --id '$1' --names '$names' --name '$NAME' --family '$fam' $2" \
+        || need_bootstrap "$1"
+}
+
 for line in "${LINES[@]}"; do
     [ -z "${line:-}" ] && continue
     case "$line" in \#*) continue ;; esac
@@ -47,8 +54,22 @@ for line in "${LINES[@]}"; do
     [ -n "$host" ] || continue
     fam="$(fam_of "$host")"
     echo "== $host: $names (family=$fam)"
-    ssh -n "$host" "sudo -n $RUNNER sender --ns '$NS' --id '$host' --names '$names' --name '$NAME' --family '$fam'" \
-        || need_bootstrap "$host"
+
+    # 1. данные и ключ, без запуска публикации
+    install_sender "$host" --defer-publish
+
+    # 2. ключ хоста разрешаем на NS (forced command приёмника)
+    pub="$(ssh -n "$host" "cat '$CFG/key.pub'" 2>/dev/null)" || {
+        echo "не удалось прочитать $CFG/key.pub на $host" >&2
+        exit 1
+    }
+    NAME="$NAME" "$HERE/authorize.sh" "$NS" "$pub" || {
+        echo "не удалось разрешить ключ $host на $NS" >&2
+        exit 1
+    }
+
+    # 3. публикация: теперь ключ на NS принят
+    install_sender "$host"
 done
 
 echo "реестр применён"

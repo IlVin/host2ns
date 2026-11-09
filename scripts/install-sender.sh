@@ -7,14 +7,16 @@ NAME="${NAME:-host2ns}"
 BASE="${BASE:-iv77msk.ru}"
 NS=""; NAMES=""; FAMILY="${FAMILY:-ipv6,ipv4}"; ID="$(hostname -s)"; RUN_USER="$(id -un)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+NAMES_SET=0; DEFER=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --ns) NS="$2"; shift 2 ;;
-    --names) NAMES="$2"; shift 2 ;;
+    --names) NAMES="$2"; NAMES_SET=1; shift 2 ;;
     --id) ID="$2"; shift 2 ;;
     --name) NAME="$2"; shift 2 ;;
     --family) FAMILY="$2"; shift 2 ;;
+    --defer-publish) DEFER=1; shift ;;
     *) echo "неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
 done
@@ -42,8 +44,21 @@ if [ ! -f "$CFG/key" ]; then
   fi
 fi
 
+# публичный ключ нужен NS: publish.sh забирает его и разрешает приёмник
+if [ ! -f "$CFG/key.pub" ]; then
+  ssh-keygen -y -f "$CFG/key" | sudo -n tee "$CFG/key.pub" >/dev/null
+  sudo -n chmod 644 "$CFG/key.pub"
+fi
+
 printf '%s\n' "$ID" | sudo -n tee "$CFG/id" >/dev/null
-if [ -n "$NAMES" ]; then printf '%s\n' $NAMES | sudo -n tee "$CFG/names" >/dev/null; fi
+if [ "$NAMES_SET" = "1" ]; then
+  if [ -n "$NAMES" ]; then
+    printf '%s\n' $NAMES | sudo -n tee "$CFG/names" >/dev/null
+  else
+    # пустой список — осознанное удаление всех имён хоста
+    : | sudo -n tee "$CFG/names" >/dev/null
+  fi
+fi
 printf '%s\n' "$FAMILY" | sudo -n tee "$CFG/family" >/dev/null
 sudo -n chmod 644 "$CFG/id"; sudo -n chmod 644 "$CFG/names" 2>/dev/null || true
 
@@ -60,7 +75,6 @@ After=network-online.target
 Type=oneshot
 User=$RUN_USER
 Environment=NAME=$NAME
-Environment=FAMILY=$FAMILY
 ExecStart=/usr/local/bin/$NAME.sh
 UNIT
 sudo -n tee "/etc/systemd/system/$NAME.timer" >/dev/null <<UNIT
@@ -76,6 +90,10 @@ AccuracySec=1min
 WantedBy=timers.target
 UNIT
 sudo -n systemctl daemon-reload
+if [ "$DEFER" = "1" ]; then
+  echo "  таймер не включён: сначала разрешите ключ на NS"
+  exit 0
+fi
 sudo -n systemctl enable --now "$NAME.timer" >/dev/null
 sudo -n systemctl start "$NAME.service" || { sudo -n journalctl -u "$NAME.service" -n 10 --no-pager >&2; die "служба публикации упала"; }
 

@@ -7,13 +7,14 @@ NAME         ?= host2ns
 BASE         ?= iv77msk.ru
 HOST2NS_HOME ?= $(HOME)/.$(NAME)
 
-.PHONY: help host2ns status check bootstrap-nsd bootstrap-host restore
+.PHONY: help host2ns status check bootstrap-nsd bootstrap-host restore authorize
 
 help:
 	@echo "make host2ns          применить реестр: установить/обновить на всех хостах"
 	@echo "make status           состояние: зоны, имена, свежесть публикаций"
 	@echo "make check            локальная проверка генерации зон"
 	@echo "make bootstrap-host HOST=x  подготовить хост: скрипты + NOPASSWD"
+	@echo "make authorize HOST=x разрешить ключ хоста на NS (после bootstrap-host)"
 	@echo "make bootstrap-nsd    установить и настроить NSD на этом хосте"
 	@echo "make restore          перегенерировать зоны из состояния"
 	@echo ""
@@ -31,6 +32,13 @@ bootstrap-host:
 	@scp -q /tmp/$(NAME)-boot.tgz "$(HOST):/tmp/$(NAME)-boot.tgz"
 	@ssh -tt "$(HOST)" "rm -rf /tmp/$(NAME)-boot && mkdir -p /tmp/$(NAME)-boot && tar -xzf /tmp/$(NAME)-boot.tgz -C /tmp/$(NAME)-boot && sudo NAME=$(NAME) bash /tmp/$(NAME)-boot/bootstrap-host.sh" 2>&1 | cat
 	@rm -f /tmp/$(NAME)-boot.tgz
+
+authorize:
+	@test -n "$(HOST)" || { echo "нужен HOST=<алиас>" >&2; exit 2; }
+	@. $(HOST2NS_HOME)/config; \
+	pub="$$(ssh -n $(HOST) 'cat /etc/$(NAME)/key.pub' 2>/dev/null)" || { \
+	    echo "нет /etc/$(NAME)/key.pub на $(HOST): сначала make bootstrap-host и make host2ns" >&2; exit 2; }; \
+	NAME=$(NAME) ./scripts/authorize.sh "$$NS" "$$pub"
 
 restore:
 	@. $(HOST2NS_HOME)/config; ssh -t "$$NS" 'sudo systemctl restart $(NAME)-zones.service && systemctl is-active nsd'
