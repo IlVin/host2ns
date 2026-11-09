@@ -22,10 +22,17 @@ while [ $# -gt 0 ]; do
     *) echo "неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
 done
-[ -n "$NS" ] || { echo "нужен --ns user@host" >&2; exit 2; }
-
 CFG="/etc/$NAME"
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 2; }
+
+# значения попадают в ssh-команды и пути: проверяем до sudo
+[ -n "$NS" ] || die "нужен --ns user@host"
+[[ "$NS" != -* && "$NS" =~ ^[A-Za-z0-9._-]+(@[A-Za-z0-9._-]+)?$ ]] || die "плохой NS: $NS"
+[[ "$NAME" =~ ^[a-z][a-z0-9-]*$ ]] || die "плохое NAME: $NAME"
+[[ "$ID" != -* && "$ID" =~ ^[A-Za-z0-9._-]+$ ]] || die "плохой id: $ID"
+FAMILY="$(printf '%s' "$FAMILY" | tr -d '[:space:]')"
+[[ "$FAMILY" =~ ^(ipv6|ipv4|nat)(,(ipv6|ipv4|nat))*$ ]] \
+    || die "плохая FAMILY: $FAMILY (допустимо ipv6, ipv4, nat)"
 
 echo "  отправитель на $(hostname -s)"
 sudo -v || die "нужны права sudo"

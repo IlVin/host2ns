@@ -18,6 +18,14 @@ HOSTS="$H2H/hosts"
 [ -f "$H2H/config" ] || { echo "нет $H2H/config — скопируйте config.example" >&2; exit 2; }
 . "$H2H/config"
 
+# значения уходят в ssh-команды на хостах: проверяем до подключения
+[ -n "${NS:-}" ] || { echo "в config нет NS" >&2; exit 2; }
+[[ "$NS" != -* && "$NS" =~ ^[A-Za-z0-9._-]+(@[A-Za-z0-9._-]+)?$ ]] \
+    || { echo "плохой NS в config: $NS" >&2; exit 2; }
+[[ "$NAME" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "плохое NAME: $NAME" >&2; exit 2; }
+[[ "$BASE" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] \
+    || { echo "плохая BASE: $BASE" >&2; exit 2; }
+
 declare -A FAM
 if [ -f "$H2H/policy" ]; then
     while read -r h f; do
@@ -52,7 +60,15 @@ for line in "${LINES[@]}"; do
     case "$line" in \#*) continue ;; esac
     read -r host names <<< "$line"
     [ -n "$host" ] || continue
+    [[ "$host" != -* && "$host" =~ ^[A-Za-z0-9._-]+$ ]] \
+        || { echo "плохой хост в реестре: $host" >&2; exit 2; }
+    for n in $names; do
+        [[ "$n" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] \
+            || { echo "плохое имя в реестре: $n" >&2; exit 2; }
+    done
     fam="$(fam_of "$host")"
+    [[ "$fam" =~ ^(ipv6|ipv4|nat)(,(ipv6|ipv4|nat))*$ ]] \
+        || { echo "плохая политика для $host: $fam" >&2; exit 2; }
     echo "== $host: $names (family=$fam)"
 
     # 1. данные и ключ, без запуска публикации

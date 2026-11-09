@@ -108,6 +108,20 @@ EOF
 [ ! -e "$R/zones/plb.example.ru.zone" ] || fail "переезд: файл старой зоны остался"
 grep -q 'name: "plb.example.ru"' "$R/zones.conf" && fail "переезд: старая зона в конфиге"
 
+# установщики отвергают опасные аргументы до root-действий
+if bash "$HERE/install-ns.sh" --src /tmp/x >/dev/null 2>&1; then fail "install-ns принял --src"; fi
+if NAME='../x' bash "$HERE/install-ns.sh" >/dev/null 2>&1; then fail "install-ns принял NAME с .."; fi
+if bash "$HERE/install-ns.sh" --base 'bad base' >/dev/null 2>&1; then fail "install-ns принял плохую BASE"; fi
+if bash "$HERE/install-sender.sh" --ns '-oProxyCommand=x' >/dev/null 2>&1; then fail "install-sender принял NS-опцию"; fi
+if bash "$HERE/install-sender.sh" --ns user@ns --family auto >/dev/null 2>&1; then fail "install-sender принял FAMILY=auto"; fi
+P="$T/pub-bad"; mkdir -p "$P/home" "$P/bin"
+printf 'NS=user@ns\nBASE=example.ru\n' > "$P/home/config"
+printf 'web1 "bad;name"\n' > "$P/home/hosts"
+printf '#!/bin/sh\nexit 0\n' > "$P/bin/ssh"; chmod +x "$P/bin/ssh"
+if HOST2NS_HOME="$P/home" PATH="$P/bin:$PATH" NAME=check bash "$HERE/publish.sh" >/dev/null 2>&1; then
+    fail "publish принял плохое имя из реестра"
+fi
+
 # dispatcher: NAME и LIB берутся из имени файла.
 ln -s "$HERE/host2ns-install.sh" "$T/foo-install.sh"
 out="$(bash "$T/foo-install.sh" sender 2>&1 || true)"

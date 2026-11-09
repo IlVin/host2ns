@@ -3,22 +3,33 @@
 # Запускается с sudo; на вход получает каталог с исходниками (SRC).
 set -euo pipefail
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 NAME="${NAME:-host2ns}"
 BASE="${BASE:-iv77msk.ru}"
 RUN_USER="${RUN_USER:-root}"
-SRC="${SRC:-/tmp/$NAME-pkg/scripts}"
+# SRC задаёт диспетчер (root-каталог); --src не принимаем, чтобы нельзя было
+# подсунуть код из /tmp через NOPASSWD-вызов.
+SRC="${SRC:-$HERE}"
+
+die() { echo "ОШИБКА: $*" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) NAME="$2"; shift 2 ;;
     --base) BASE="$2"; shift 2 ;;
     --user) RUN_USER="$2"; shift 2 ;;
-    --src)  SRC="$2"; shift 2 ;;
     *) echo "неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
 done
 
-[ -f "$SRC/zonegen.sh" ] || { echo "нет исходников в $SRC" >&2; exit 2; }
+# параметры идут в root-пути: без проверки --name '..' уводит chown куда угодно
+[[ "$NAME" =~ ^[a-z][a-z0-9-]*$ ]] || die "плохое NAME: $NAME"
+[[ "$BASE" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] \
+    || die "плохая BASE: $BASE"
+[[ "$RUN_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] && id -u "$RUN_USER" >/dev/null 2>&1 \
+    || die "нет такого пользователя: $RUN_USER"
+[ "$(id -u)" = "0" ] || die "нужен root"
+[ -f "$SRC/zonegen.sh" ] || die "нет исходников в $SRC"
 
 echo "  каталоги"
 install -d -m 755 "/var/lib/$NAME/state" "/etc/$NAME" /etc/nsd/nsd.conf.d
