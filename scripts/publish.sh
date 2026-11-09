@@ -61,8 +61,7 @@ install_sender() { # <хост> [доп. аргументы установщик
 for line in "${LINES[@]}"; do
     line="${line%%#*}"
     read -r host names <<< "$line"
-    [ -z "${host:-}" ] && continue
-    [ -n "$host" ] || continue
+    [ -n "${host:-}" ] || continue
     [[ "$host" != -* && "$host" =~ ^[A-Za-z0-9._-]+$ ]] \
         || { echo "плохой хост в реестре: $host" >&2; exit 2; }
     for n in $names; do
