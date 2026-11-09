@@ -28,4 +28,18 @@ grep -q 'tg.d IN AAAA 2a02:2168::1111' "$zf" || fail "нет записи tg.d"
 grep -q 'name: "plb.example.ru"' "$ZONES_CONF" || fail "нет блока зоны в конфиге"
 [ ! -s "$ZONELIST" ] || fail "рантайм-список должен быть пуст"
 
+# Конфиг NSD из bootstrap-nsd: проверяем настоящим nsd-checkconf, если он есть.
+bash "$HERE/bootstrap-nsd.sh" --print-config > "$T/00-check.conf"
+grep -q $'^\tdo-ip4: yes$' "$T/00-check.conf" || fail "в конфиге NSD нет реальной табуляции"
+grep -q $'^\tip-address: 0.0.0.0@53$' "$T/00-check.conf" || fail "в конфиге NSD нет ip-address"
+if grep -q 'listen:' "$T/00-check.conf"; then fail "в конфиге NSD остался listen:"; fi
+if command -v nsd-checkconf >/dev/null; then
+    printf 'include: "%s"\n' "$T/00-check.conf" > "$T/nsd.conf"
+    nsd-checkconf "$T/nsd.conf" || fail "nsd-checkconf отверг конфиг"
+    [ "$(nsd-checkconf -o zonesdir "$T/nsd.conf")" = "/var/lib/nsd/zones" ] \
+        || fail "nsd-checkconf не видит zonesdir"
+else
+    echo "  пропущено: nsd-checkconf не установлен"
+fi
+
 echo "проверка пройдена: 2 зоны, записи на месте, конфиг сформирован"
