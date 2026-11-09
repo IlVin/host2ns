@@ -101,6 +101,7 @@ done
 
 ID="$(printf '%s' "$ID" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9-')"
 [ -n "$ID" ] || { echo "пустой id" >&2; exit 2; }
+POLICY="$(printf '%s' "$POLICY" | tr -d '[:space:]')"
 
 # nat: публичный IPv4, который видит NS. Берём из SSH_CONNECTION (ставит sshd).
 if printf '%s' "$POLICY" | tr ',' '\n' | grep -qx nat; then

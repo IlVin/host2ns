@@ -8,7 +8,7 @@
 | `rebuild.sh` | NS | зоны из состояния до старта `nsd` |
 | `install-sender.sh` | хост | ключ, отправитель, таймер, проверка публикации; `--defer-publish` — без запуска |
 | `install-ns.sh` | NS | приёмник, юнит генерации, sudoers; ключи хостов разрешает `authorize.sh` |
-| `host2ns-install.sh` | хост | диспетчер `sender|ns`; единственная команда с NOPASSWD |
+| `host2ns-install.sh` | хост | диспетчер `sender|ns` с NOPASSWD; приёмник — второе правило, только forced command |
 | `authorize.sh` | рабочая машина | разрешает ключ отправителя на NS с forced command |
 | `prune.sh` | рабочая машина | удаляет имена хостов, которых больше нет в реестре |
 | `bootstrap-host.sh` | хост | кладёт код в `/usr/local/lib` и правило sudo; нужен пароль |

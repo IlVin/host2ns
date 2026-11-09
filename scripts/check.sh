@@ -346,7 +346,7 @@ exit 0
 EOS
 chmod +x "$P/bin/ssh"
 HOST2NS_HOME="$P/home" PATH="$P/bin:$PATH" SSH_LOG="$P/log" FAKE_PUB="$P/k.pub" \
-    NAME=check bash "$HERE/publish.sh" >/dev/null || fail "publish с комментариями упал"
+    NAME=check bash "$HERE/publish.sh" >/dev/null 2>&1 || fail "publish с комментариями упал"
 grep -q "sender.*--names 'tg.d.plb'.*--family 'ipv4'" "$P/log" \
     || fail "publish: комментарий попал в --names/--family"
 if grep -q '#' "$P/log"; then fail "publish: комментарий ушёл на хост"; fi

@@ -4,7 +4,6 @@
 set -euo pipefail
 
 NAME="${NAME:-host2ns}"
-BASE="${BASE:-iv77msk.ru}"
 NS=""; NAMES=""; FAMILY="${FAMILY:-ipv6,ipv4}"; ID="$(hostname -s)"; RUN_USER="${RUN_USER:-$(id -un)}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 NAMES_SET=0; DEFER=0

@@ -11,6 +11,8 @@ CFG_DIR="${HOST2NS_HOME:-$HOME/.$NAME}"
 NS="${NS:-}"
 [ -f "$CFG_DIR/config" ] && . "$CFG_DIR/config"
 [ -n "$NS" ] || { echo "нет NS в $CFG_DIR/config" >&2; exit 2; }
+FAMILY="$(printf '%s' "$FAMILY" | tr -d '[:space:]')"
+BASE="$(printf '%s' "$BASE" | tr -d '[:space:]')"
 HOSTS_FILE="${HOSTS_FILE:-$CFG_DIR/hosts}"
 NS_ADDR="${NS#*@}"
 BAD=0
