@@ -20,8 +20,10 @@
     Wants=<NAME>-zones.service
     After=<NAME>-zones.service
 
-Юнит отправителя получает только имя проекта:
+Юнит отправителя получает только имя проекта и тянет сеть:
 
+    Wants=network-online.target
+    After=network-online.target
     Environment=NAME=<NAME>
 
 Политику семейства отправитель читает из `/etc/<NAME>/family`: файл — один

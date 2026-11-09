@@ -76,6 +76,7 @@ rm -f "/tmp/$NAME-sender.sh"
 sudo -n tee "/etc/systemd/system/$NAME.service" >/dev/null <<UNIT
 [Unit]
 Description=host2ns: публикация адресов хоста в DNS
+Wants=network-online.target
 After=network-online.target
 
 [Service]
