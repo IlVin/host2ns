@@ -85,6 +85,12 @@ policy ipv6
 EOF
 [ ! -e "$R/state/plb.example.ru/h-nat6" ] || fail "пустой набор не удалил имена"
 
+# install-sender: пользователь сервиса не теряется под sudo.
+[ "$(RUN_USER=alice bash "$HERE/install-sender.sh" --print-user)" = "alice" ] \
+    || fail "install-sender: RUN_USER из окружения потерян"
+[ "$(bash "$HERE/install-sender.sh" --print-user)" = "$(id -un)" ] \
+    || fail "install-sender: RUN_USER по умолчанию"
+
 # authorize.sh: строка authorized_keys с forced command.
 ssh-keygen -t ed25519 -N "" -C "check@test" -f "$T/ak" >/dev/null 2>&1 || fail "ssh-keygen"
 line="$(NAME=check bash "$HERE/authorize.sh" --print-line "$(cat "$T/ak.pub")")"

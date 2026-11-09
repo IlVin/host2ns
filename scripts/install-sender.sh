@@ -5,7 +5,7 @@ set -euo pipefail
 
 NAME="${NAME:-host2ns}"
 BASE="${BASE:-iv77msk.ru}"
-NS=""; NAMES=""; FAMILY="${FAMILY:-ipv6,ipv4}"; ID="$(hostname -s)"; RUN_USER="$(id -un)"
+NS=""; NAMES=""; FAMILY="${FAMILY:-ipv6,ipv4}"; ID="$(hostname -s)"; RUN_USER="${RUN_USER:-$(id -un)}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 NAMES_SET=0; DEFER=0
 
@@ -17,6 +17,8 @@ while [ $# -gt 0 ]; do
     --name) NAME="$2"; shift 2 ;;
     --family) FAMILY="$2"; shift 2 ;;
     --defer-publish) DEFER=1; shift ;;
+    # диагностика: от чьего имени пойдёт сервис публикации
+    --print-user) printf '%s\n' "$RUN_USER"; exit 0 ;;
     *) echo "неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
 done
