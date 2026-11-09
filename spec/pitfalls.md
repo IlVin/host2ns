@@ -30,6 +30,7 @@
 | `apt-get update`: EXPKEYSIG/404 в чужом репозитории | сторонний репозиторий сломан, update возвращает 100 | скрипт продолжает установку `nsd`; чужой репозиторий чинят или отключают отдельно |
 | установщик рапортует успех, а на хосте нет скрипта | `bootstrap-host` молча пропускал отсутствующий файл | проверять комплект до root-действий |
 | `make bootstrap-nsd` без `HOST` поставил NSD локально | раньше target игнорировал `HOST` | теперь `HOST` обязателен; установка идёт по SSH на указанный хост |
+| `ssh/scp: Bad owner or permissions on /etc/ssh/ssh_config.d/...` | файл системного ssh-конфига доступен группе/миру или принадлежит не root | `sudo chown root:root <файл>; sudo chmod 644 <файл>`; проверить `ssh -G <хост>` |
 | ключ хоста не принят на NS | `install-sender` создавал ключ, но публичную половину никто не клал в `authorized_keys` | `authorize.sh` + forced command приёмника |
 | сервис публикации работает от root | `install-sender` брал `id -un` вместо переданного `RUN_USER` | `RUN_USER="${RUN_USER:-$(id -un)}"` |
 | sudo: a terminal is required | sudo без NOPASSWD в неинтерактивной сессии | NOPASSWD на один установщик, вызов через sudo -n |
