@@ -33,6 +33,10 @@ die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 2; }
 FAMILY="$(printf '%s' "$FAMILY" | tr -d '[:space:]')"
 [[ "$FAMILY" =~ ^(ipv6|ipv4|nat)(,(ipv6|ipv4|nat))*$ ]] \
     || die "плохая FAMILY: $FAMILY (допустимо ipv6, ipv4, nat)"
+# без файла имён отправитель молча ничего не публикует
+if [ "$NAMES_SET" = "0" ] && [ ! -f "$CFG/names" ]; then
+    die "не заданы имена: передайте --names (пустая строка — удалить имена)"
+fi
 
 echo "  отправитель на $(hostname -s)"
 sudo -v || die "нужны права sudo"

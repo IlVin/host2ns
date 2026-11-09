@@ -99,7 +99,8 @@ main() {
     if [ "$pub4" = "1" ]; then
         addr4="$(ip -4 -o addr show scope global 2>/dev/null | ipv4_candidates | first_public_v4)"
     fi
-    [ -n "$addr6" ] || [ -n "$addr4" ] || [ "$nat" = "1" ] || exit 0
+    # Пустой набор адресов — тоже состояние: приёмник удалит прежние записи.
+    # Иначе имя продолжало бы указывать на уже несуществующий адрес.
 
     while IFS= read -r n; do
         n="${n%%#*}"

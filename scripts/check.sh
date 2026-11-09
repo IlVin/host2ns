@@ -208,6 +208,30 @@ printf 'auto\n' > "$S/etc/family"
 if sender_run >/dev/null 2>&1; then fail "отправитель принял FAMILY=auto"; fi
 printf 'ipv6,ipv4\n' > "$S/etc/family"
 
+# отправитель без адресов присылает пустой набор, а приёмник удаляет имена
+mkdir -p "$S/bin-empty"
+cat > "$S/bin-empty/ip" <<'EOS'
+#!/bin/sh
+case " $* " in
+  *" -6 "*) printf '%s\n' '2: eth0    inet6 fd00::1/64 scope global' ;;
+  *" -4 "*) printf '%s\n' '2: eth0    inet 10.0.0.5/24 scope global' ;;
+esac
+EOS
+chmod +x "$S/bin-empty/ip"
+R="$T/recv-no-addr"
+mkdir -p "$R" "$R/state/plb.example.ru"
+printf 'example.ru\n' > "$R/base"
+printf 'tg.d 2a02:2168::1111\n' > "$R/state/plb.example.ru/h1"
+printf 'ipv6,ipv4\n' > "$S/etc/family"
+rm -f "$S/var/last"; : > "$S/capture"
+env PATH="$S/bin-empty:$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check \
+    CFG="$S/etc" STATE="$S/var/last" NS=user@ns bash "$HERE/host2ns.sh" \
+    || fail "отправитель без адресов упал"
+grep -q '^policy ipv6,ipv4$' "$S/capture" || fail "пустой набор: нет policy"
+[ -s "$S/var/last" ] || fail "пустой набор: состояние не сохранено"
+recv_run "$R" < "$S/capture" >/dev/null || fail "приёмник не принял пустой набор"
+[ ! -e "$R/state/plb.example.ru/h1" ] || fail "пустой набор не удалил имена"
+
 # приёмник отвергает не-IP и служебные диапазоны
 R="$T/recv-bad"
 mkdir -p "$R"
