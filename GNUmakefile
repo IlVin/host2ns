@@ -54,7 +54,7 @@ restore:
 bootstrap-nsd:
 	@test -n "$(HOST)" || { echo "нужен HOST=<ns>; локальная машина указывается явно, например HOST=user@localhost" >&2; exit 2; }
 	@scp -q scripts/bootstrap-nsd.sh "$(HOST):/tmp/$(NAME)-bootstrap-nsd.sh"
-	@ssh -t "$(HOST)" 'sudo NAME=$(NAME) BASE=$(BASE) bash /tmp/$(NAME)-bootstrap-nsd.sh; rc=$$?; rm -f /tmp/$(NAME)-bootstrap-nsd.sh; exit $$rc'
+	@set -o pipefail; ssh -tt "$(HOST)" 'sudo NAME=$(NAME) BASE=$(BASE) bash /tmp/$(NAME)-bootstrap-nsd.sh; rc=$$?; rm -f /tmp/$(NAME)-bootstrap-nsd.sh; exit $$rc' 2>&1 | cat
 
 check:
 	@bash scripts/check.sh

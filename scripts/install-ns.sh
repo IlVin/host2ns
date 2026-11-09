@@ -29,7 +29,7 @@ done
 [[ "$RUN_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] && id -u "$RUN_USER" >/dev/null 2>&1 \
     || die "нет такого пользователя: $RUN_USER"
 [ "$(id -u)" = "0" ] || die "нужен root"
-command -v nsd >/dev/null || die "NSD не установлен: сначала make bootstrap-nsd"
+command -v nsd >/dev/null || die "NSD не установлен: сначала make bootstrap-nsd HOST=<ns>"
 [ -f "$SRC/zonegen.sh" ] || die "нет исходников в $SRC"
 
 echo "  каталоги"
