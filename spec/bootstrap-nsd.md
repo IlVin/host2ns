@@ -7,12 +7,15 @@
 
 ## 5.1. Что делает
 
-1. Ставит пакет `nsd`, если его нет.
+1. Ставит пакет `nsd`, если его нет (с `apt-get update`).
 2. Создаёт `/var/lib/nsd/zones`, владелец `nsd:nsd`.
-3. Пишет `/etc/nsd/nsd.conf.d/00-host2ns.conf`: прослушивание на 53 по IPv4 и
-   IPv6, `zonesdir`.
-4. `nsd-checkconf` — проверка до запуска.
-5. Включает и запускает `nsd`.
+3. Пишет `/etc/nsd/nsd.conf.d/00-<NAME>.conf`: `ip-address: 0.0.0.0@53` и
+   `::@53`, `zonesdir`, а также `remote-control: control-enable: yes`.
+   Конфиг печатается тем же `printf`, что проверяется в `make check`.
+4. Создаёт ключи `nsd-control`, если их нет.
+5. `nsd-checkconf` и проверка, что `zonesdir` виден через `include` из
+   `/etc/nsd/nsd.conf` — иначе drop-in молча игнорируется.
+6. Включает и запускает `nsd`.
 
 ## 5.2. Почему так
 
@@ -20,6 +23,8 @@
 | --- | --- |
 | зоны только через конфиг, не через `nsd-control addzone` | `addzone` требует имя pattern, а не путь; промах даёт пустую зону |
 | `zonelistfile` в `/run/nsd` | в `/var/lib/nsd` файл принадлежит root и не читается службой |
-| генерация зон отдельным юнитом | `ProtectSystem=strict` в `nsd.service` запрещает запись даже root-у |
+| генерация зон отдельным юнитом | юнит должен отработать **до** NSD; в старых пакетах песочница `nsd.service` не давала писать в `/var/lib/nsd`. В актуальных пакетах есть `ReadWritePaths=/var/lib/nsd`, но полагаться на это нельзя |
+| `ip-address:`, а не `listen:` | `listen` — синтаксис BIND/Knot, NSD его не знает |
+| `remote-control: control-enable: yes` явно | иначе `nsd-control` может быть выключен и каждая публикация уйдёт в полный `systemctl restart` |
 | зоны не пишутся «на место» вручную | файлы — производное от состояния |
 | база имён — в `/etc/<NAME>/base`, не в конфиге NSD | NSD базу не читает; файл нужен приёмнику и генератору |
