@@ -306,6 +306,17 @@ if env PATH="$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check CFG="$S/etc" \
         STATE="$S/var/last" NS='' bash "$HERE/host2ns.sh" >/dev/null 2>&1; then
     fail "отправитель принял незаменённый NS"
 fi
+# установленная копия: sed заменяет шаблон только в значении по умолчанию
+sed "s|@NS@|user@ns|" "$HERE/host2ns.sh" > "$T/sender-installed.sh"
+bash -n "$T/sender-installed.sh" || fail "установленный отправитель: синтаксис"
+if grep -q '@NS@' "$T/sender-installed.sh"; then
+    fail "шаблон @NS@ остался в установленном отправителе"
+fi
+: > "$S/capture"
+env PATH="$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check CFG="$S/etc" \
+    STATE="$S/var/installed-last" bash "$T/sender-installed.sh" \
+    || fail "установленный отправитель не отработал без NS в окружении"
+grep -q '^host h1$' "$S/capture" || fail "установленный отправитель: нет данных"
 
 # приёмник отвергает не-IP и служебные диапазоны
 R="$T/recv-bad"

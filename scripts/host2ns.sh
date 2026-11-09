@@ -91,8 +91,10 @@ main() {
 
     [ -f "$CFG/family" ] && FAMILY="$(tr -d '[:space:]' < "$CFG/family")"
     [ -n "$FAMILY" ] || { echo "пустой FAMILY в $CFG/family" >&2; exit 2; }
-    [ -n "$NS" ] && [ "$NS" != "@NS@" ] \
-        || { echo "не задан NS: шаблон @NS@ не заменён установщиком" >&2; exit 2; }
+    # шаблон собран из частей: иначе sed установщика заменит его и здесь
+    local placeholder="@""NS@"
+    [ -n "$NS" ] && [ "$NS" != "$placeholder" ] \
+        || { echo "не задан NS: установщик не подставил адрес" >&2; exit 2; }
     parsed="$(parse_family "$FAMILY")" || exit 2
     read -r pub6 pub4 nat <<< "$parsed"
 
