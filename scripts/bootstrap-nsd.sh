@@ -81,11 +81,16 @@ tmp_conf="$(mktemp "$(dirname "$CONF")/.00-$NAME.XXXXXX")"
 nsd_config > "$tmp_conf"
 chmod 644 "$tmp_conf"
 config_changed=1
+old_conf=""
 if [ -f "$CONF" ] && cmp -s "$tmp_conf" "$CONF"; then
     config_changed=0
     rm -f "$tmp_conf"
     echo "  конфиг не изменился"
 else
+    if [ -f "$CONF" ]; then
+        old_conf="$(mktemp "$(dirname "$CONF")/.00-$NAME-old.XXXXXX")"
+        cp -p "$CONF" "$old_conf"
+    fi
     mv -f "$tmp_conf" "$CONF"
     echo "  конфиг обновлён"
 fi
@@ -95,9 +100,23 @@ echo "== ключи nsd-control"
 nsd-control-setup >/dev/null 2>&1 || true
 
 echo "== проверка конфигурации"
-nsd-checkconf /etc/nsd/nsd.conf
+if ! nsd-checkconf /etc/nsd/nsd.conf; then
+    if [ -n "$old_conf" ] && [ -f "$old_conf" ]; then
+        cp -p "$old_conf" "$CONF"
+        rm -f "$old_conf"
+        echo "  конфиг не прошёл проверку; оставлен прежний" >&2
+    fi
+    die "nsd-checkconf отверг конфиг"
+fi
 got="$(nsd-checkconf -o zonesdir /etc/nsd/nsd.conf)"
-[ "$got" = "$ZONESDIR" ] || die "конфиг не подхвачен: zonesdir=$got (проверьте include в /etc/nsd/nsd.conf)"
+if [ "$got" != "$ZONESDIR" ]; then
+    if [ -n "$old_conf" ] && [ -f "$old_conf" ]; then
+        cp -p "$old_conf" "$CONF"
+        rm -f "$old_conf"
+        echo "  конфиг не подхвачен; оставлен прежний" >&2
+    fi
+    die "конфиг не подхвачен: zonesdir=$got (проверьте include в /etc/nsd/nsd.conf)"
+fi
 
 # show_port_owner — кто держит 53 и что с этим делать.
 show_port_owner() {
@@ -124,22 +143,75 @@ show_port_owner() {
     fi
 }
 
+# nsd_pids_on_53 — PID'ы процессов, слушающих 53 (UDP и TCP).
+nsd_pids_on_53() {
+    command -v ss >/dev/null 2>&1 || return 0
+    { ss -lnup 'sport = :53' 2>/dev/null; ss -lntp 'sport = :53' 2>/dev/null; } \
+        | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u
+}
+
+# stop_existing_nsd — освободить 53 от прежнего NSD: управляемого unit'а
+# или процесса старой установки. NSD переименовывает потоки в "nsd: main",
+# поэтому pgrep -x nsd его не находит; берём PID из ss и проверяем exe.
+stop_existing_nsd() {
+    systemctl stop nsd >/dev/null 2>&1 || true
+    local pids="" pid exe alive
+    for pid in $(nsd_pids_on_53); do
+        [ -d "/proc/$pid" ] || continue
+        exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
+        case "$exe" in
+            */nsd*) pids="$pids $pid" ;;
+        esac
+    done
+    [ -n "$pids" ] || return 0
+    echo "  останавливаю существующий NSD (pids:$pids)" >&2
+    for pid in $pids; do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    for _ in $(seq 1 20); do
+        alive=0
+        for pid in $pids; do
+            kill -0 "$pid" 2>/dev/null && alive=1
+        done
+        [ "$alive" = "0" ] && break
+        sleep 0.25
+    done
+    for pid in $pids; do
+        kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
+    done
+    sleep 0.5
+}
+
 echo "== запуск"
 systemctl enable nsd >/dev/null 2>&1 || true
-# после неудачных стартов systemd держит start-limit; снимаем его перед попыткой
-systemctl reset-failed nsd >/dev/null 2>&1 || true
 if [ "$config_changed" = "0" ] && systemctl is-active --quiet nsd; then
     # повторный запуск не должен трогать работающий NSD
     echo "  NSD уже работает, конфиг не менялся — перезапуск не нужен"
-elif systemctl is-active --quiet nsd; then
-    systemctl restart nsd >/dev/null 2>&1 || true
 else
+    # обновление существующей установки: старый NSD (unit или процесс) убираем,
+    # иначе новый не сможет занять его адреса
+    stop_existing_nsd
+    # после неудачных стартов systemd держит start-limit; снимаем его
+    systemctl reset-failed nsd >/dev/null 2>&1 || true
     systemctl start nsd >/dev/null 2>&1 || true
 fi
 
 if ! systemctl is-active --quiet nsd; then
+    if [ -n "$old_conf" ] && [ -f "$old_conf" ]; then
+        cp -p "$old_conf" "$CONF"
+        stop_existing_nsd
+        systemctl reset-failed nsd >/dev/null 2>&1 || true
+        systemctl start nsd >/dev/null 2>&1 || true
+        if systemctl is-active --quiet nsd; then
+            echo "восстановлен прежний конфиг, NSD работает" >&2
+            rm -f "$old_conf"
+            die "новый конфиг не применён; NSD работает со старым"
+        fi
+    fi
+    rm -f "$old_conf"
     show_port_owner
     journalctl -u nsd -n 20 --no-pager >&2 || true
     die "NSD не поднялся: journalctl -u nsd"
 fi
+rm -f "$old_conf"
 echo "готово: NSD настроен (NAME=$NAME, BASE=$BASE)"
