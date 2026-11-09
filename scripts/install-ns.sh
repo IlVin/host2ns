@@ -34,11 +34,6 @@ command -v nsd >/dev/null || die "NSD не установлен: сначала 
 
 echo "  каталоги"
 install -d -m 755 "/var/lib/$NAME/state" "/etc/$NAME" /etc/nsd/nsd.conf.d
-if [ -d /var/lib/yach/ddns ] && [ ! -e "/var/lib/$NAME/state/.migrated" ]; then
-    cp -a /var/lib/yach/ddns/. "/var/lib/$NAME/state/" 2>/dev/null || true
-    touch "/var/lib/$NAME/state/.migrated"
-    echo "  состояние перенесено из /var/lib/yach/ddns"
-fi
 chown -R "$RUN_USER" "/var/lib/$NAME"
 
 echo "  база имён"
@@ -76,19 +71,8 @@ printf '[Unit]\nWants=%s-zones.service\nAfter=%s-zones.service\n' "$NAME" "$NAME
     > "/etc/systemd/system/nsd.service.d/10-$NAME-zones.conf"
 chmod 644 "/etc/systemd/system/nsd.service.d/10-$NAME-zones.conf"
 
-systemctl disable --now yach-ddns-restore.service >/dev/null 2>&1 || true
-rm -f /etc/systemd/system/yach-ddns-restore.service
 systemctl daemon-reload
 systemctl enable "$NAME-zones.service" >/dev/null 2>&1 || true
-echo "  ключи хостов: путь к приёмнику"
-AK="/home/$RUN_USER/.ssh/authorized_keys"
-if [ -f "$AK" ]; then
-    cp -a "$AK" "$AK.bak.$(date +%s)"
-    RECV="/usr/local/bin/$NAME-recv.sh"
-    # одна замена закрывает все варианты: старый путь, литерал $NAME, без -n
-    sed -i "s|command=\"[^\"]*-recv\.sh\"|command=\"sudo -n $RECV\"|g" "$AK"
-    echo "  обновлено в $AK"
-fi
 echo "  sudoers для приёмника"
 cat > "/etc/sudoers.d/90-$NAME" <<SUDO
 # host2ns: приёмник запускается forced command в authorized_keys
@@ -97,5 +81,4 @@ $RUN_USER ALL=(root) NOPASSWD: /usr/local/bin/$NAME-recv.sh
 SUDO
 chmod 440 "/etc/sudoers.d/90-$NAME"
 visudo -cf "/etc/sudoers.d/90-$NAME" >/dev/null || { rm -f "/etc/sudoers.d/90-$NAME"; echo "sudoers не прошёл проверку" >&2; exit 1; }
-rm -f /etc/sudoers.d/90-yach-ddns
 echo "  приёмник установлен"

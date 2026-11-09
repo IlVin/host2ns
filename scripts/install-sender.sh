@@ -45,16 +45,10 @@ sudo -n install -d -m 755 -o "$RUN_USER" -g "$(id -gn)" "/var/lib/$NAME"
 sudo -n install -d -m 755 "$CFG"
 
 if [ ! -f "$CFG/key" ]; then
-  if [ -f "/etc/yach/ddns-key" ]; then
-    sudo -n install -m 400 -o "$RUN_USER" -g "$(id -gn)" /etc/yach/ddns-key "$CFG/key"
-    sudo -n rm -f /etc/yach/ddns-key /etc/yach/ddns-key.pub
-    echo "  ключ перенесён из /etc/yach"
-  else
-    ssh-keygen -t ed25519 -N "" -C "$NAME@$ID" -f "/tmp/$NAME-key" >/dev/null
-    sudo -n install -m 400 -o "$RUN_USER" -g "$(id -gn)" "/tmp/$NAME-key" "$CFG/key"
-    sudo -n install -m 644 -o "$RUN_USER" -g "$(id -gn)" "/tmp/$NAME-key.pub" "$CFG/key.pub"
-    rm -f "/tmp/$NAME-key" "/tmp/$NAME-key.pub"
-  fi
+  ssh-keygen -t ed25519 -N "" -C "$NAME@$ID" -f "/tmp/$NAME-key" >/dev/null
+  sudo -n install -m 400 -o "$RUN_USER" -g "$(id -gn)" "/tmp/$NAME-key" "$CFG/key"
+  sudo -n install -m 644 -o "$RUN_USER" -g "$(id -gn)" "/tmp/$NAME-key.pub" "$CFG/key.pub"
+  rm -f "/tmp/$NAME-key" "/tmp/$NAME-key.pub"
 fi
 
 # публичный ключ нужен NS: publish.sh забирает его и разрешает приёмник

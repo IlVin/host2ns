@@ -58,12 +58,12 @@
 | файлы и каталоги | `/etc/<NAME>`, `/var/lib/<NAME>`, `/usr/local/lib/<NAME>` |
 | юниты systemd | `<NAME>.service`, `<NAME>.timer`, `<NAME>-zones.service` |
 | drop-in NSD | `/etc/systemd/system/nsd.service.d/10-<NAME>-zones.conf` |
-| ключи хостов | `command="sudo -n /usr/local/bin/<NAME>-recv.sh"` в `authorized_keys` |
+| ключи хостов | `restrict,command="sudo -n /usr/local/bin/<NAME>-recv.sh"` в `authorized_keys`; строку пишет `authorize.sh` |
 | sudoers | `90-<NAME>` (приёмник), `90-<NAME>-install` (диспетчер) |
 | конфиг зон | `/etc/nsd/nsd.conf.d/10-<NAME>-zones.conf` |
 | скрипты на хосте | `/usr/local/bin/<NAME>*` |
 
 Проверка после переименования:
 
-    grep -rl "host2ddns\|yach" /etc/systemd/system /etc/sudoers.d /etc/nsd 2>/dev/null
+    grep -rl "host2ddns" /etc/systemd/system /etc/sudoers.d /etc/nsd 2>/dev/null
     grep -o 'command="[^"]*"' ~/.ssh/authorized_keys | sort -u

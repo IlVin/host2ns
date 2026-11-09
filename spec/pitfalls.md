@@ -12,7 +12,7 @@
 | zonegen: Permission denied в ExecStartPre | ProtectSystem=strict запрещает запись даже root | генерация отдельным юнитом Before=nsd |
 | start request repeated too quickly | systemd блокирует юнит после пяти падений | systemctl reset-failed nsd |
 | новые имена не видны, помогает только restart nsd | nsd-control reconfig перечитывает **конфиг**, а не данные зон | добавить nsd-control reload |
-| дубль зоны в двух конфигах | остался старый файл 10-yach-zones.conf | один файл конфигурации на проект |
+| дубль зоны в двух конфигах | остался конфиг прежнего проекта | один файл конфигурации на проект |
 
 ## 6.2. Установка и права
 
