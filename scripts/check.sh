@@ -285,6 +285,24 @@ env PATH="$S/bin-empty:$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check \
 [ -s "$S/capture" ] || fail "смена NS не вызвала переотправку"
 grep -q '^host h1$' "$S/capture" || fail "после смены NS нет данных"
 
+# отправитель не публикует пустой набор из-за пустых настроек
+: > "$S/etc/family"
+if env PATH="$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check CFG="$S/etc" \
+        STATE="$S/var/last" NS=user@ns bash "$HERE/host2ns.sh" >/dev/null 2>&1; then
+    fail "отправитель принял пустой FAMILY"
+fi
+printf 'ipv6,ipv4\n' > "$S/etc/family"
+: > "$S/etc/id"
+if env PATH="$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check CFG="$S/etc" \
+        STATE="$S/var/last" NS=user@ns bash "$HERE/host2ns.sh" >/dev/null 2>&1; then
+    fail "отправитель принял пустой id"
+fi
+printf 'h1\n' > "$S/etc/id"
+if env PATH="$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check CFG="$S/etc" \
+        STATE="$S/var/last" NS='' bash "$HERE/host2ns.sh" >/dev/null 2>&1; then
+    fail "отправитель принял незаменённый NS"
+fi
+
 # приёмник отвергает не-IP и служебные диапазоны
 R="$T/recv-bad"
 mkdir -p "$R"

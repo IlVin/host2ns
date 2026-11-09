@@ -89,10 +89,14 @@ main() {
     command -v ip >/dev/null || { echo "нет команды ip (iproute2)" >&2; exit 2; }
 
     [ -f "$CFG/family" ] && FAMILY="$(tr -d '[:space:]' < "$CFG/family")"
+    [ -n "$FAMILY" ] || { echo "пустой FAMILY в $CFG/family" >&2; exit 2; }
+    [ -n "$NS" ] && [ "$NS" != "@NS@" ] \
+        || { echo "не задан NS: шаблон @NS@ не заменён установщиком" >&2; exit 2; }
     parsed="$(parse_family "$FAMILY")" || exit 2
     read -r pub6 pub4 nat <<< "$parsed"
 
     id="$(cat "$ID_FILE" 2>/dev/null || hostname -s)"
+    [ -n "$id" ] || { echo "пустой id в $ID_FILE" >&2; exit 2; }
     if [ "$pub6" = "1" ]; then
         addr6="$(ip -6 -o addr show scope global 2>/dev/null | ipv6_candidates | first_public_v6)"
     fi
