@@ -37,22 +37,22 @@ fam_of() { printf '%s' "${FAM[$1]:-$FAMILY}"; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 mapfile -t LINES < "$HOSTS"
-NS_HOST="${NS#*@}"
 RUNNER="/usr/local/bin/$NAME-install.sh"
 CFG="/etc/$NAME"
 
-need_bootstrap() {
-    echo "нет доступа на $1: сделайте make bootstrap-host HOST=$1" >&2
+install_failed() {
+    echo "установщик на $1 завершился с ошибкой (вывод выше)" >&2
+    echo "если хост ещё не подготовлен: make bootstrap-host HOST=$1" >&2
     exit 1
 }
 
-echo "== $NS_HOST: приёмник"
-ssh -n "$NS_HOST" "sudo -n $RUNNER ns --name '$NAME' --base '$BASE'" \
-    || need_bootstrap "$NS_HOST"
+echo "== $NS: приёмник"
+ssh -n "$NS" "sudo -n $RUNNER ns --name '$NAME' --base '$BASE'" \
+    || install_failed "$NS"
 
 install_sender() { # <хост> [доп. аргументы установщика]
     ssh -n "$1" "sudo -n $RUNNER sender --ns '$NS' --id '$1' --names '$names' --name '$NAME' --family '$fam' $2" \
-        || need_bootstrap "$1"
+        || install_failed "$1"
 }
 
 for line in "${LINES[@]}"; do

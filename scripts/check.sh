@@ -259,6 +259,25 @@ tg.d.plb
 EOF
 [ ! -e "$R/state/plb.example.ru/h-priv" ] || fail "nat опубликовал приватный адрес"
 
+# publish: NS с пользователем из config, ошибка установщика не маскируется
+P="$T/pub-fail"
+mkdir -p "$P/home" "$P/bin"
+printf 'NS=user@ns\nBASE=example.ru\n' > "$P/home/config"
+printf 'web1 tg.d.plb\n' > "$P/home/hosts"
+cat > "$P/bin/ssh" <<'EOS'
+#!/bin/sh
+printf '%s\n' "$*" >> "$SSH_LOG"
+for a in "$@"; do case "$a" in *sender*) exit 1 ;; esac; done
+exit 0
+EOS
+chmod +x "$P/bin/ssh"
+rc=0
+out="$(HOST2NS_HOME="$P/home" PATH="$P/bin:$PATH" SSH_LOG="$P/log" NAME=check bash "$HERE/publish.sh" 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] || fail "publish: ожидался код 1, получен $rc"
+case "$out" in *"make bootstrap-host HOST=web1"*) ;; *) fail "publish: нет подсказки про bootstrap-host" ;; esac
+case "$out" in *"нет доступа"*) fail "publish: ошибка установщика замаскирована" ;; esac
+grep -q 'user@ns' "$P/log" || fail "publish: NS без пользователя из config"
+
 # prune: удаляет только хост, которого нет в реестре
 P="$T/prune"
 mkdir -p "$P/home" "$P/bin"
