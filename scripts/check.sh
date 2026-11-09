@@ -151,6 +151,63 @@ then
     fail "приёмник вернул успех, когда NSD не перечитал зоны"
 fi
 
+# отправитель: выбор стабильного адреса и разбор FAMILY
+# shellcheck disable=SC1091
+. "$HERE/host2ns.sh"
+[ "$(parse_family ipv6,ipv4)" = "1 1 0" ] || fail "parse_family ipv6,ipv4"
+[ "$(parse_family nat,ipv6)" = "1 0 1" ] || fail "parse_family nat,ipv6"
+if parse_family auto >/dev/null 2>&1; then fail "parse_family принял auto"; fi
+v6_fixture='2: eth0    inet6 2001:db8::1/64 scope global temporary dynamic
+2: eth0    inet6 2001:db8::2/64 scope global deprecated dynamic
+2: eth0    inet6 fd00::1/64 scope global
+2: eth0    inet6 2001:db8::3/64 scope global mngtmpaddr noprefixroute'
+[ "$(printf '%s\n' "$v6_fixture" | ipv6_candidates | first_public_v6)" = "2001:db8::3" ] \
+    || fail "выбор IPv6: temporary/deprecated/ULA не отфильтрованы"
+v4_fixture='2: eth0    inet 10.0.0.5/24 scope global dynamic eth0
+2: eth0    inet 203.0.113.7/24 scope global eth0
+2: eth0    inet 100.64.0.9/10 scope global'
+[ "$(printf '%s\n' "$v4_fixture" | ipv4_candidates | first_public_v4)" = "203.0.113.7" ] \
+    || fail "выбор IPv4: приватный адрес не отфильтрован"
+
+# отправитель целиком: фейковые ip и ssh, без сети и root
+S="$T/sender"
+mkdir -p "$S/bin" "$S/etc" "$S/var"
+cat > "$S/bin/ip" <<'EOS'
+#!/bin/sh
+case " $* " in
+  *" -6 "*) printf '%s\n' '2: eth0    inet6 2001:db8::1/64 scope global temporary dynamic' \
+                          '2: eth0    inet6 fd00::1/64 scope global' \
+                          '2: eth0    inet6 2001:db8::3/64 scope global mngtmpaddr noprefixroute' ;;
+  *" -4 "*) printf '%s\n' '2: eth0    inet 10.0.0.5/24 scope global dynamic eth0' \
+                          '2: eth0    inet 203.0.113.7/24 scope global eth0' ;;
+esac
+EOS
+cat > "$S/bin/ssh" <<'EOS'
+#!/bin/sh
+cat > "$SSH_CAPTURE"
+EOS
+chmod +x "$S/bin/ip" "$S/bin/ssh"
+printf 'h1\n' > "$S/etc/id"
+printf 'tg.d.plb\nhub.d.plb\n' > "$S/etc/names"
+printf 'ipv6,ipv4\n' > "$S/etc/family"
+: > "$S/etc/key"
+sender_run() {
+    env PATH="$S/bin:$PATH" SSH_CAPTURE="$S/capture" NAME=check \
+        CFG="$S/etc" STATE="$S/var/last" NS=user@ns bash "$HERE/host2ns.sh"
+}
+sender_run || fail "отправитель не отработал"
+grep -q '^tg.d.plb 2001:db8::3 203.0.113.7$' "$S/capture" || fail "отправитель: неверный адрес"
+: > "$S/capture"
+sender_run || fail "повторный запуск отправителя"
+[ -s "$S/capture" ] && fail "отправитель повторно отправил неизменное состояние"
+printf 'nat\n' > "$S/etc/family"
+rm -f "$S/var/last"; : > "$S/capture"
+sender_run || fail "отправитель с FAMILY=nat"
+grep -q '^policy nat$' "$S/capture" || fail "отправитель: нет policy nat"
+printf 'auto\n' > "$S/etc/family"
+if sender_run >/dev/null 2>&1; then fail "отправитель принял FAMILY=auto"; fi
+printf 'ipv6,ipv4\n' > "$S/etc/family"
+
 # приёмник отвергает не-IP и служебные диапазоны
 R="$T/recv-bad"
 mkdir -p "$R"
